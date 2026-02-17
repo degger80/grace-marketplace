@@ -8,6 +8,8 @@ This plugin packages Vladimir's methodology as a reusable Claude Code marketplac
 
 ## Installation
 
+### Via Claude Code Plugin Marketplace
+
 ```bash
 # Add the marketplace
 /plugin marketplace add osovv/grace-marketplace
@@ -15,6 +17,21 @@ This plugin packages Vladimir's methodology as a reusable Claude Code marketplac
 # Install the plugin
 /plugin install grace@grace-marketplace
 ```
+
+### Via npx skills (Vercel Skills CLI)
+
+```bash
+# Install GRACE skill to Claude Code
+npx skills add osovv/grace-marketplace
+
+# Or install globally (available across all projects)
+npx skills add osovv/grace-marketplace -g
+
+# Install to a specific agent
+npx skills add osovv/grace-marketplace -a claude-code
+```
+
+> Browse more skills at [skills.sh](https://skills.sh)
 
 ## Quick Start
 
