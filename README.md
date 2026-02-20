@@ -119,17 +119,19 @@ $grace-execute
 | `/grace:status` | `grace-status` | Project health report |
 | `/grace:ask <question>` | `grace-ask` | Answer questions with context |
 
-## Skills
+## Reference Skills
 
-- **semantic-markup** — START/END block conventions, ~500 token granularity, unique block names
-- **knowledge-graph** — How to maintain `docs/knowledge-graph.xml`
-- **contract-driven-dev** — MODULE_CONTRACT, function contracts, governed autonomy (PCAM)
-- **unique-tag-convention** — Unique ID-based XML tags that eliminate closing-tag polysemy
+- **grace-explainer** — Complete GRACE methodology reference with detailed docs on:
+  - Semantic markup — START/END block conventions, ~500 token granularity, unique block names
+  - Knowledge graph — How to maintain `docs/knowledge-graph.xml`
+  - Contract-driven dev — MODULE_CONTRACT, function contracts, governed autonomy (PCAM)
+  - Unique tag convention — Unique ID-based XML tags that eliminate closing-tag polysemy
+- **grace-reviewer** — Validates semantic markup integrity, contract completeness, graph consistency
 
-## Agents (Claude Code)
+## Agents (Claude Code only)
 
 - **grace-architect** (Opus) — Top-down architectural planning, module decomposition, knowledge graph design
-- **grace-reviewer** (Sonnet) — Validates semantic markup integrity, contract completeness, graph consistency
+- **grace-reviewer** (Sonnet) — Integrity validation (also available as an Agent Skill for other agents)
 
 ## Compatibility
 
