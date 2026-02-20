@@ -35,7 +35,7 @@ update knowledge-graph.xml with CrossLinks, and run type checking.
 ```
 
 #### 2b. Code Review
-After the subagent completes, launch a code-review Task subagent (subagent_type: "superpowers:code-reviewer") to review:
+After the subagent completes, launch a code-review Task subagent (subagent_type: "grace:grace-reviewer") to review:
 - Does the generated code match the MODULE_CONTRACT from `development-plan.xml`?
 - Are all GRACE markup conventions followed (paired blocks, unique names, ~500 token granularity)?
 - Are imports correct and do they reference existing modules?
