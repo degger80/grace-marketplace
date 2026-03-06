@@ -1,0 +1,4 @@
+interface:
+  display_name: "GRACE Verification"
+  short_description: "Design AI-friendly verification"
+  brand_color: "#4A90D9"

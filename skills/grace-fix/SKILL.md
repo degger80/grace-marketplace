@@ -38,6 +38,7 @@ After fixing:
 2. If the fix changed the function's behavior — update its CONTRACT
 3. If the fix changed module dependencies — update knowledge-graph.xml CrossLinks
 4. Run type checking or linting to verify
+5. If the failure revealed weak tests, weak logs, or poor execution-trace visibility — use `$grace-verification` to strengthen automated checks before considering the issue fully closed
 
 ### Important
 - Never fix code without first reading its CONTRACT

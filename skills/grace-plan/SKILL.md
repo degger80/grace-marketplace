@@ -68,7 +68,7 @@ After user approval:
 
 1. Update `docs/development-plan.xml` with the full module breakdown, contracts, and data flows. Use unique ID-based tags: `M-xxx` for modules, `Phase-N` for phases, `DF-xxx` for flows, `step-N` for steps, `export-name` for interface entries. See AGENTS.md "Documentation Artifacts" for full convention.
 2. Update `docs/knowledge-graph.xml` with all modules (as `M-xxx` tags), their annotations (as `fn-name`, `type-Name`, etc.), and CrossLinks between them.
-3. Print: "Architecture approved. Run `$grace-generate module-name` to start generating code, or `$grace-execute` to generate all modules sequentially."
+3. Print: "Architecture approved. Run `$grace-generate module-name` to start generating code, `$grace-execute` for sequential execution, or `$grace-multiagent-execute` for parallel-safe waves."
 
 ## Important
 - Do NOT generate any code during this phase

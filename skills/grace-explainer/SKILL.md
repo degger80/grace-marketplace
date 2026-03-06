@@ -75,10 +75,13 @@ Each layer feeds the next. The knowledge graph is both an output of planning and
 3. Fill in `technology.xml` with stack decisions
 4. `$grace-plan` — architect modules, generate development plan and knowledge graph
 5. `$grace-generate module-name` — generate one module with full markup
-6. `$grace-execute` — generate all modules with review and commits
-7. `$grace-refresh` — sync knowledge graph after manual changes
-8. `$grace-fix error-description` — debug via semantic navigation
-9. `$grace-status` — health report
+6. `$grace-execute` — generate all modules sequentially with review and commits
+7. `$grace-setup-subagents` — scaffold shell-specific GRACE worker/reviewer presets
+8. `$grace-multiagent-execute` — generate parallel-safe modules in controller-managed waves
+9. `$grace-verification` — design AI-friendly tests, traces, and observability
+10. `$grace-refresh` — sync knowledge graph after manual changes
+11. `$grace-fix error-description` — debug via semantic navigation
+12. `$grace-status` — health report
 
 ## Detailed References
 

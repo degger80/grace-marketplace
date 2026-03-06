@@ -35,6 +35,7 @@ List the 5 most recent CHANGE_SUMMARY entries across all files.
 Based on the status, suggest what to do next:
 - If no requirements — "Define requirements in docs/requirements.xml"
 - If requirements but no plan — "Run `$grace-plan`"
-- If plan but missing modules — "Run `$grace-generate module` or `$grace-execute`"
+- If plan but missing modules — "Run `$grace-generate module`, `$grace-execute`, or `$grace-multiagent-execute`"
 - If drift detected — "Run `$grace-refresh`"
+- If tests or logs are too weak for autonomous work — "Run `$grace-verification`"
 - If everything synced — "Project is healthy"

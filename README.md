@@ -66,12 +66,14 @@ $skill-installer install https://github.com/osovv/grace-marketplace/tree/main/sk
 $skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace-plan
 $skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace-generate
 $skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace-execute
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace-add
+$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace-multiagent-execute
+$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace-setup-subagents
 $skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace-fix
 $skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace-refresh
 $skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace-status
 $skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace-ask
 $skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace-explainer
+$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace-verification
 $skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace-reviewer
 ```
 
@@ -111,6 +113,10 @@ cp -r grace-marketplace/skills/grace-* /path/to/your/agent/skills/
 
 # Or execute the entire development plan
 /grace-execute
+
+# Or execute independent modules in parallel waves
+/grace-setup-subagents
+/grace-multiagent-execute
 ```
 
 ## Skills
@@ -119,20 +125,17 @@ cp -r grace-marketplace/skills/grace-* /path/to/your/agent/skills/
 |---|---|
 | `grace-init` | Bootstrap GRACE structure (docs/, templates, knowledge graph) |
 | `grace-plan` | Architectural planning — module breakdown, contracts, knowledge graph |
-| `grace-add` | Add a new module with contract and knowledge graph entry |
 | `grace-generate` | Generate code for a module with full GRACE markup |
 | `grace-execute` | Execute full plan with validation and commits |
+| `grace-multiagent-execute` | Execute plan in parallel waves with controller-managed integrity |
+| `grace-setup-subagents` | Scaffold shell-specific GRACE subagent presets |
 | `grace-fix` | Debug via semantic navigation |
+| `grace-verification` | Design AI-friendly verification, logs, and trace checks |
 | `grace-refresh` | Sync knowledge graph with codebase |
 | `grace-status` | Project health report |
 | `grace-ask` | Answer questions with full project context |
 | `grace-explainer` | Complete GRACE methodology reference |
 | `grace-reviewer` | Validate semantic markup, contracts, and graph consistency |
-
-## Agents (Claude Code only)
-
-- **grace-architect** (Opus) — Top-down architectural planning, module decomposition, knowledge graph design
-- **grace-reviewer** (Sonnet) — Integrity validation (also available as a skill for other agents)
 
 ## Compatibility
 
