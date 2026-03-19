@@ -6,6 +6,14 @@ The format is inspired by Keep a Changelog, and this project follows Semantic Ve
 
 This changelog currently starts at `1.3.0`. Earlier history is available in the git log.
 
+## [3.0.2] - 2026-03-19
+
+### Fixed
+
+- Re-aligned the Claude Code marketplace layout with the official docs by serving the `grace` plugin from `./plugins/grace`.
+- Restored the plugin manifest to `plugins/grace/.claude-plugin/plugin.json` and removed the unsupported root plugin manifest.
+- Updated marketplace validation to enforce relative plugin sources and to verify component paths inside each plugin source directory.
+
 ## [3.0.1] - 2026-03-19
 
 ### Fixed

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -13,14 +13,23 @@ type ValidationResult = {
 };
 
 const repoRoot = process.cwd();
-const marketplacePath = path.join(repoRoot, ".claude-plugin", "marketplace.json");
-const rootPluginManifestPath = path.join(repoRoot, ".claude-plugin", "plugin.json");
+const marketplaceDir = path.join(repoRoot, ".claude-plugin");
+const marketplacePath = path.join(marketplaceDir, "marketplace.json");
 const readmePath = path.join(repoRoot, "README.md");
 const openPackagePath = path.join(repoRoot, "openpackage.yml");
 const componentFields = ["skills", "agents", "commands"] as const;
+const pluginComponentFields = ["commands", "agents", "hooks", "mcpServers", "lspServers", "outputStyles"] as const;
 
 function readJson(filePath: string): JsonObject {
   return JSON.parse(readFileSync(filePath, "utf8")) as JsonObject;
+}
+
+function pathExists(targetPath: string): boolean {
+  return existsSync(targetPath);
+}
+
+function isDirectory(targetPath: string): boolean {
+  return pathExists(targetPath) && lstatSync(targetPath).isDirectory();
 }
 
 function getChangedFiles(): string[] | null {
@@ -58,7 +67,7 @@ function normalizeComparableValue(value: unknown): string {
 }
 
 function validateRequiredFields(
-  pluginName: string,
+  objectName: string,
   sourceName: string,
   source: JsonObject,
   fields: string[],
@@ -67,13 +76,13 @@ function validateRequiredFields(
   for (const field of fields) {
     const value = source[field];
     if (typeof value !== "string" || value.trim() === "") {
-      errors.push(`${pluginName}: missing required field "${field}" in ${sourceName}`);
+      errors.push(`${objectName}: missing required field "${field}" in ${sourceName}`);
     }
   }
 }
 
 function compareSharedFields(
-  pluginName: string,
+  objectName: string,
   leftName: string,
   left: JsonObject,
   rightName: string,
@@ -84,7 +93,7 @@ function compareSharedFields(
   for (const field of fields) {
     if (normalizeComparableValue(left[field]) !== normalizeComparableValue(right[field])) {
       errors.push(
-        `${pluginName}: ${field} mismatch between ${leftName} (${JSON.stringify(left[field] ?? null)}) and ${rightName} (${JSON.stringify(right[field] ?? null)})`,
+        `${objectName}: ${field} mismatch between ${leftName} (${JSON.stringify(left[field] ?? null)}) and ${rightName} (${JSON.stringify(right[field] ?? null)})`,
       );
     }
   }
@@ -170,7 +179,7 @@ function validateComponentPaths(
         continue;
       }
 
-      if (!existsSync(resolvedPath)) {
+      if (!pathExists(resolvedPath)) {
         errors.push(`${pluginName}: missing ${field} path inside source (${componentPath})`);
       }
     }
@@ -186,27 +195,29 @@ function validate(): ValidationResult {
   const pluginEntries = Array.isArray(marketplace.plugins) ? (marketplace.plugins as JsonObject[]) : [];
   const changedFiles = getChangedFiles();
   const scopedEntries = getScopedEntries(pluginEntries, changedFiles);
+  const readmeVersion = getReadmeVersion();
+  const openPackageVersion = getOpenPackageVersion();
+  const marketplaceVersion = typeof marketplace.metadata === "object" && marketplace.metadata
+    ? String((marketplace.metadata as JsonObject).version ?? "")
+    : "";
 
   if (pluginEntries.length === 0) {
     errors.push("marketplace.json: no plugins declared");
   }
 
-  const readmeVersion = getReadmeVersion();
-  const openPackageVersion = getOpenPackageVersion();
   if (!readmeVersion) {
     errors.push('README.md: missing "Current packaged version: `x.y.z`" marker');
   }
+
   if (!openPackageVersion) {
     errors.push("openpackage.yml: missing version");
   }
-  if (!existsSync(rootPluginManifestPath)) {
-    errors.push(".claude-plugin/plugin.json: missing root plugin manifest");
-  }
 
-  const rootPluginManifest = existsSync(rootPluginManifestPath) ? readJson(rootPluginManifestPath) : null;
-  const marketplaceVersion = typeof marketplace.metadata === "object" && marketplace.metadata
-    ? String((marketplace.metadata as JsonObject).version ?? "")
-    : "";
+  const rootManifestFiles = readdirSync(marketplaceDir);
+  const extraRootManifestFiles = rootManifestFiles.filter((fileName) => fileName !== "marketplace.json");
+  if (extraRootManifestFiles.length > 0) {
+    errors.push(`marketplace root: extra files in .claude-plugin (${extraRootManifestFiles.join(", ")})`);
+  }
 
   for (const entry of scopedEntries) {
     const pluginName = String(entry.name ?? "");
@@ -222,29 +233,29 @@ function validate(): ValidationResult {
       continue;
     }
 
+    if (!source.startsWith("./")) {
+      errors.push(`${pluginName}: relative source must start with ./ (${source})`);
+      continue;
+    }
+
     const sourceDir = path.resolve(repoRoot, source);
     const pluginManifestDir = path.join(sourceDir, ".claude-plugin");
     const pluginManifestPath = path.join(pluginManifestDir, "plugin.json");
 
     validateRequiredFields(pluginName, "marketplace.json", entry, ["name", "version", "description"], errors);
 
-    if (!existsSync(pluginManifestPath)) {
+    if (!isDirectory(sourceDir)) {
+      errors.push(`${pluginName}: source directory not found (${path.relative(repoRoot, sourceDir)})`);
+      continue;
+    }
+
+    if (!pathExists(pluginManifestPath)) {
       errors.push(`${pluginName}: missing plugin manifest at ${path.relative(repoRoot, pluginManifestPath)}`);
       continue;
     }
 
     const pluginManifest = readJson(pluginManifestPath);
     validateRequiredFields(pluginName, ".claude-plugin/plugin.json", pluginManifest, ["name", "version", "description"], errors);
-
-    const hasExplicitComponents = componentFields.some(
-      (field) => Array.isArray(entry[field]) && (entry[field] as unknown[]).length > 0,
-    );
-
-    if (hasExplicitComponents && entry.strict !== true) {
-      errors.push(
-        `${pluginName}: marketplace entry defines components via skills/agents/commands and must set strict: true`,
-      );
-    }
 
     compareSharedFields(
       pluginName,
@@ -256,36 +267,44 @@ function validate(): ValidationResult {
       errors,
     );
 
+    const hasMarketplaceDefinedComponents = componentFields.some(
+      (field) => Array.isArray(entry[field]) && (entry[field] as unknown[]).length > 0,
+    );
+    const pluginDefinesComponents = pluginComponentFields.some((field) => pluginManifest[field] !== undefined);
+
+    if (hasMarketplaceDefinedComponents && entry.strict !== true) {
+      errors.push(`${pluginName}: marketplace entry defines components and must set strict: true`);
+    }
+
+    if (entry.strict === false && pluginDefinesComponents) {
+      errors.push(`${pluginName}: strict: false conflicts with component fields declared in plugin manifest`);
+    }
+
     validateComponentPaths(pluginName, sourceDir, entry, errors);
 
     if (readmeVersion && String(entry.version ?? "") !== readmeVersion) {
       errors.push(`${pluginName}: version mismatch between marketplace.json (${entry.version}) and README.md (${readmeVersion})`);
     }
+
     if (openPackageVersion && String(entry.version ?? "") !== openPackageVersion) {
       errors.push(
         `${pluginName}: version mismatch between marketplace.json (${entry.version}) and openpackage.yml (${openPackageVersion})`,
       );
     }
+
     if (marketplaceVersion && String(entry.version ?? "") !== marketplaceVersion) {
       errors.push(
         `${pluginName}: version mismatch between marketplace metadata (${marketplaceVersion}) and plugin entry (${entry.version})`,
       );
     }
 
-    const allowedManifestFiles = sourceDir === repoRoot
-      ? new Set(["marketplace.json", "plugin.json"])
-      : new Set(["plugin.json"]);
-    const actualManifestFiles = readdirSync(pluginManifestDir);
-    const extraFiles = actualManifestFiles.filter((fileName) => !allowedManifestFiles.has(fileName));
-    if (extraFiles.length > 0) {
+    const pluginManifestFiles = readdirSync(pluginManifestDir);
+    const extraPluginManifestFiles = pluginManifestFiles.filter((fileName) => fileName !== "plugin.json");
+    if (extraPluginManifestFiles.length > 0) {
       errors.push(
-        `${pluginName}: extra files in ${path.relative(repoRoot, pluginManifestDir)} (${extraFiles.join(", ")})`,
+        `${pluginName}: extra files in ${path.relative(repoRoot, pluginManifestDir)} (${extraPluginManifestFiles.join(", ")})`,
       );
     }
-  }
-
-  if (rootPluginManifest) {
-    validateRequiredFields("root", ".claude-plugin/plugin.json", rootPluginManifest, ["name", "version", "description"], errors);
   }
 
   collectHardcodedPathWarnings(repoRoot, hardcodedPathWarnings);
@@ -307,12 +326,14 @@ function printResult(result: ValidationResult) {
   const marketplaceSyncFailed = result.errors.some(
     (error) =>
       error.includes("mismatch") ||
+      error.includes("source directory not found") ||
       error.includes("missing plugin manifest") ||
       error.includes("missing skills path") ||
       error.includes("missing agents path") ||
       error.includes("missing commands path") ||
       error.includes("escapes source root") ||
-      error.includes("must set strict: true"),
+      error.includes("must set strict: true") ||
+      error.includes("relative source must start with ./"),
   );
   const versionFailed = result.errors.some((error) => error.includes("version mismatch") || error.includes("missing version"));
   const fieldsFailed = result.errors.some((error) => error.includes('missing required field') || error.includes('plugin entry missing'));
