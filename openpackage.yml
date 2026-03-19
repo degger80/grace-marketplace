@@ -1,7 +1,7 @@
 name: grace
 description: "GRACE (Graph-RAG Anchored Code Engineering) - contract-first AI engineering with semantic markup, knowledge graphs, and log-driven verification"
 version: 3.0.0
-author: Vladimir Ivanov
+author: osovv
 license: MIT
 keywords:
   - grace
