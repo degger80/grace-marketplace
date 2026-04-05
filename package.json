@@ -25,6 +25,7 @@
   "files": [
     "src/grace.ts",
     "src/grace-lint.ts",
+    "src/lint",
     "README.md",
     "LICENSE"
   ],
@@ -45,6 +46,7 @@
     "grace": "./src/grace.ts"
   },
   "dependencies": {
-    "citty": "^0.2.2"
+    "citty": "^0.2.2",
+    "typescript": "^6.0.2"
   }
 }

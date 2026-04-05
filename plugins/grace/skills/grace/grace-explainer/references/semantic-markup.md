@@ -14,6 +14,8 @@ Every important source file must begin with:
 //   SCOPE: [What operations are included]
 //   DEPENDS: [List of module dependencies]
 //   LINKS: [References to knowledge graph nodes]
+//   ROLE: [Optional: RUNTIME | TEST | BARREL | CONFIG | TYPES | SCRIPT]
+//   MAP_MODE: [Optional: EXPORTS | LOCALS | SUMMARY | NONE]
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -24,6 +26,20 @@ Every important source file must begin with:
 Adapt comment syntax to the project language (`#` for Python, `//` for Go/TS/Java, `--` for SQL).
 
 Substantial test files should use the same structure when tests are the fastest way for future agents to understand behavior, fixtures, and expected evidence.
+
+Optional lint-specific fields:
+
+- `ROLE` tells `grace lint` what kind of governed file this is.
+- `MAP_MODE` tells `grace lint` how to interpret `MODULE_MAP`.
+
+Recommended defaults:
+
+- `RUNTIME` + `EXPORTS` for normal source modules
+- `TEST` + `LOCALS` for substantial test files
+- `BARREL` + `SUMMARY` for re-export aggregators
+- `CONFIG` + `NONE` for tool or build configuration files
+- `TYPES` + `EXPORTS` for pure type/interface modules
+- `SCRIPT` + `LOCALS` for CLI/bootstrap/smoke scripts
 
 ## Function or Component Level
 
@@ -96,4 +112,8 @@ expect(hasLogMarker("info", "[ChatDomain][createChat][BLOCK_INSERT_CHAT]")).toBe
 2. When editing code, preserve block boundaries unless the edit truly requires restructuring.
 3. If a block grows beyond the working window, split it into sub-blocks.
 4. If you rename a block, update all log references and related verification entries.
-5. `MODULE_MAP` must reflect the current exports of the file.
+5. `MODULE_MAP` must match the file's lint mode:
+   - `EXPORTS` => reflect public exports
+   - `LOCALS` => reflect important local helpers, fixtures, or entry points
+   - `SUMMARY` => summarize grouped surfaces without enumerating every symbol
+   - `NONE` => omit `MODULE_MAP` when the file role truly does not need one

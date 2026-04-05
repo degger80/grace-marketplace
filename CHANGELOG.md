@@ -6,6 +6,14 @@ The format is inspired by Keep a Changelog, and this project follows Semantic Ve
 
 This changelog currently starts at `1.3.0`. Earlier history is available in the git log.
 
+## [Unreleased]
+
+### Changed
+
+- Refactored `grace lint` into a role-aware core plus language-adapter architecture with a JS/TS AST adapter.
+- Added `ROLE` and `MAP_MODE` support for governed files so tests, barrels, configs, types, and scripts are linted by semantics instead of filename masks.
+- Added `auto/current/legacy` profile support and `.grace-lint.json` repository configuration.
+
 ## [3.1.1] - 2026-04-05
 
 ### Changed

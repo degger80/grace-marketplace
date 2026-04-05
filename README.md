@@ -189,6 +189,43 @@ bun install
 bun run grace lint --path /path/to/grace-project
 ```
 
+The lint command is role-aware and adapter-aware:
+
+- structural checks stay language-agnostic
+- export-map parity uses language adapters where available
+- file behavior is driven by semantic roles instead of filename masks
+
+Optional `MODULE_CONTRACT` fields for linting:
+
+```text
+ROLE: RUNTIME | TEST | BARREL | CONFIG | TYPES | SCRIPT
+MAP_MODE: EXPORTS | LOCALS | SUMMARY | NONE
+```
+
+Default behavior:
+
+- `RUNTIME` => strict export parity when a language adapter is available
+- `TEST` => `MODULE_MAP` describes important locals, fixtures, and helpers instead of exports
+- `BARREL` => `MODULE_MAP` can summarize aggregated exports
+- `CONFIG` => export parity is skipped by default
+- `TYPES` => type export surfaces are checked when the adapter supports them
+- `SCRIPT` => `MODULE_MAP` describes important local entry points and helpers instead of exports
+
+Optional repository config file:
+
+```json
+{
+  "profile": "auto",
+  "ignoredDirs": ["tmp"]
+}
+```
+
+Profiles:
+
+- `auto` => require `docs/verification-plan.xml` only when the repo already looks verification-aware
+- `current` => require current GRACE artifacts
+- `legacy` => allow older GRACE repos without a verification plan
+
 The validator checks marketplace/plugin metadata sync, version consistency, required fields, `.claude-plugin` structure, and hardcoded absolute paths. In branch or PR context it scopes validation to changed plugins via `git diff origin/main...HEAD`; otherwise it validates all plugins.
 
 ## Origin
