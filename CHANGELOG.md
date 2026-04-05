@@ -17,6 +17,7 @@ This changelog currently starts at `1.3.0`. Earlier history is available in the 
 ### Changed
 
 - Updated execution, verification, ask, fix, status, and explainer skills to recognize `docs/operational-packets.xml` when present.
+- Prepared the published CLI as the scoped npm package `@osovv/grace-cli` with a Bun-powered `grace` binary and prepublish verification checks.
 
 ## [3.0.4] - 2026-04-05
 

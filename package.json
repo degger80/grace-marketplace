@@ -1,7 +1,7 @@
 {
-  "name": "grace-cli",
+  "name": "@osovv/grace-cli",
   "version": "3.1.0",
-  "description": "GRACE CLI for linting semantic markup, contracts, and GRACE XML artifacts.",
+  "description": "GRACE CLI for linting semantic markup, contracts, and GRACE XML artifacts with a Bun-powered grace binary.",
   "license": "MIT",
   "homepage": "https://github.com/osovv/grace-marketplace#readme",
   "repository": {
@@ -15,6 +15,7 @@
     "grace",
     "cli",
     "lint",
+    "bun",
     "semantic-markup",
     "knowledge-graph"
   ],
@@ -22,16 +23,23 @@
     "access": "public"
   },
   "files": [
-    "src",
+    "src/grace.ts",
+    "src/grace-lint.ts",
     "README.md",
     "LICENSE"
   ],
   "type": "module",
+  "packageManager": "bun@1.3.8",
+  "engines": {
+    "bun": ">=1.3.8"
+  },
   "scripts": {
     "grace": "bun run ./src/grace.ts",
     "grace:lint": "bun run ./src/grace.ts lint",
+    "lint": "bun run ./src/grace.ts lint",
     "test": "bun test",
-    "validate:marketplace": "bun run ./scripts/validate-marketplace.ts"
+    "validate:marketplace": "bun run ./scripts/validate-marketplace.ts",
+    "prepublishOnly": "bun test && bun run ./src/grace.ts lint --path . --allow-missing-docs && bun run ./scripts/validate-marketplace.ts"
   },
   "bin": {
     "grace": "./src/grace.ts"
