@@ -6,7 +6,6 @@ import { formatTextReport, isValidTextFormat, lintGraceProject } from "./lint/co
 import type { LintOptions, LintResult } from "./lint/types";
 
 export type {
-  EffectiveProfile,
   GraceLintConfig,
   LanguageAdapter,
   LanguageAnalysis,
@@ -16,7 +15,6 @@ export type {
   LintSeverity,
   MapMode,
   ModuleRole,
-  RepoProfile,
 } from "./lint/types";
 
 export { formatTextReport, lintGraceProject } from "./lint/core";
@@ -48,11 +46,6 @@ export const lintCommand = defineCommand({
       description: "Output format: text or json",
       default: "text",
     },
-    profile: {
-      type: "string",
-      description: "Lint profile: auto, current, or legacy",
-      default: "auto",
-    },
     allowMissingDocs: {
       type: "boolean",
       description: "Allow repositories that do not yet have full GRACE docs",
@@ -67,7 +60,6 @@ export const lintCommand = defineCommand({
 
     const result = lintGraceProject(String(context.args.path ?? "."), {
       allowMissingDocs: Boolean(context.args.allowMissingDocs),
-      profile: String(context.args.profile ?? "auto") as LintOptions["profile"],
     });
 
     writeResult(format, result);

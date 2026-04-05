@@ -4,7 +4,6 @@ import path from "node:path";
 import { loadGraceLintConfig } from "./config";
 import { getLanguageAdapter } from "./adapters/base";
 import type {
-  EffectiveProfile,
   GraceLintConfig,
   LanguageAnalysis,
   LintIssue,
@@ -15,13 +14,9 @@ import type {
   ModuleContractInfo,
   ModuleMapItem,
   ModuleRole,
-  RepoProfile,
 } from "./types";
 
-const REQUIRED_DOCS_BY_PROFILE: Record<EffectiveProfile, string[]> = {
-  legacy: ["docs/knowledge-graph.xml", "docs/development-plan.xml"],
-  current: ["docs/knowledge-graph.xml", "docs/development-plan.xml", "docs/verification-plan.xml"],
-};
+const REQUIRED_DOCS = ["docs/knowledge-graph.xml", "docs/development-plan.xml", "docs/verification-plan.xml"] as const;
 
 const OPTIONAL_PACKET_DOC = "docs/operational-packets.xml";
 const LINT_CONFIG_FILE = ".grace-lint.json";
@@ -557,46 +552,6 @@ function lintRequiredPacketSections(result: LintResult, relativePath: string, te
   }
 }
 
-function resolveProfile(
-  requestedProfile: RepoProfile | undefined,
-  configProfile: RepoProfile | undefined,
-  docs: Record<string, string | null>,
-) {
-  const desiredProfile = requestedProfile ?? configProfile ?? "auto";
-  if (desiredProfile !== "auto") {
-    return desiredProfile;
-  }
-
-  const verificationPlan = docs["docs/verification-plan.xml"];
-  if (verificationPlan) {
-    return "current" as const;
-  }
-
-  const joinedDocs = `${docs["docs/knowledge-graph.xml"] ?? ""}\n${docs["docs/development-plan.xml"] ?? ""}`;
-  return /<verification-ref>|<V-M-/.test(joinedDocs) ? "current" : "legacy";
-}
-
-function validateProfileSelection(profile: string | undefined) {
-  if (!profile) {
-    return null;
-  }
-
-  if (profile === "auto" || profile === "current" || profile === "legacy") {
-    return null;
-  }
-
-  return {
-    severity: "error",
-    code: "config.invalid-profile-selection",
-    file: "CLI",
-    message: `Unsupported profile \`${profile}\`. Use \`auto\`, \`current\`, or \`legacy\`.`,
-  } satisfies LintIssue;
-}
-
-function isInvalidProfileIssue(issue: LintIssue) {
-  return issue.code === "config.invalid-profile" || issue.code === "config.invalid-profile-selection";
-}
-
 function lintExportMapParity(
   result: LintResult,
   relativePath: string,
@@ -771,11 +726,6 @@ function lintGovernedFile(result: LintResult, root: string, filePath: string, te
 export function lintGraceProject(projectRoot: string, options: LintOptions = {}): LintResult {
   const root = path.resolve(projectRoot);
   const { config, issues: configIssues } = loadGraceLintConfig(root);
-  const requestedProfileIssue = validateProfileSelection(options.profile as string | undefined);
-  const effectiveRequestedProfile = requestedProfileIssue ? undefined : options.profile;
-  const effectiveConfigProfile = configIssues.some((issue) => issue.code === "config.invalid-profile")
-    ? undefined
-    : config?.profile;
 
   const docs = {
     "docs/knowledge-graph.xml": readTextIfExists(path.join(root, "docs/knowledge-graph.xml")),
@@ -783,29 +733,26 @@ export function lintGraceProject(projectRoot: string, options: LintOptions = {})
     "docs/verification-plan.xml": readTextIfExists(path.join(root, "docs/verification-plan.xml")),
   } satisfies Record<string, string | null>;
 
-  const profile = resolveProfile(effectiveRequestedProfile, effectiveConfigProfile, docs);
   const result: LintResult = {
     root,
-    profile,
     filesChecked: 0,
     governedFiles: 0,
     xmlFilesChecked: 0,
-    issues: [...configIssues, ...(requestedProfileIssue ? [requestedProfileIssue] : [])],
+    issues: [...configIssues],
   };
 
-  if (configIssues.some((issue) => issue.severity === "error" && issue.file === LINT_CONFIG_FILE && !isInvalidProfileIssue(issue))) {
+  if (configIssues.some((issue) => issue.severity === "error" && issue.file === LINT_CONFIG_FILE)) {
     return result;
   }
 
-  const requiredDocs = REQUIRED_DOCS_BY_PROFILE[profile];
   if (!options.allowMissingDocs) {
-    for (const relativePath of requiredDocs) {
+    for (const relativePath of REQUIRED_DOCS) {
       if (!docs[relativePath]) {
         addIssue(result, {
           severity: "error",
           code: "docs.missing-required-artifact",
           file: relativePath,
-          message: `Missing required GRACE artifact \`${relativePath}\` for the ${profile} profile.`,
+          message: `Missing required current GRACE artifact \`${relativePath}\`.`,
         });
       }
     }
@@ -928,7 +875,6 @@ export function formatTextReport(result: LintResult) {
     "GRACE Lint Report",
     "=================",
     `Root: ${result.root}`,
-    `Profile: ${result.profile}`,
     `Code files checked: ${result.filesChecked}`,
     `Governed files checked: ${result.governedFiles}`,
     `XML files checked: ${result.xmlFilesChecked}`,

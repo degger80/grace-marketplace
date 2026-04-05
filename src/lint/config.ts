@@ -4,7 +4,7 @@ import path from "node:path";
 import type { GraceLintConfig, LintIssue } from "./types";
 
 const CONFIG_FILE_NAME = ".grace-lint.json";
-const VALID_PROFILES = new Set(["auto", "current", "legacy"]);
+const SUPPORTED_KEYS = new Set(["ignoredDirs"]);
 
 export function loadGraceLintConfig(projectRoot: string) {
   const configPath = path.join(projectRoot, CONFIG_FILE_NAME);
@@ -16,12 +16,26 @@ export function loadGraceLintConfig(projectRoot: string) {
     const parsed = JSON.parse(readFileSync(configPath, "utf8")) as GraceLintConfig;
     const issues: LintIssue[] = [];
 
-    if (parsed.profile && !VALID_PROFILES.has(parsed.profile)) {
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
       issues.push({
         severity: "error",
-        code: "config.invalid-profile",
+        code: "config.invalid-shape",
         file: CONFIG_FILE_NAME,
-        message: `Unsupported profile \`${parsed.profile}\` in ${CONFIG_FILE_NAME}. Use \`auto\`, \`current\`, or \`legacy\`.`,
+        message: `${CONFIG_FILE_NAME} must contain a JSON object.`,
+      });
+      return { config: parsed, issues };
+    }
+
+    for (const key of Object.keys(parsed)) {
+      if (SUPPORTED_KEYS.has(key)) {
+        continue;
+      }
+
+      issues.push({
+        severity: "error",
+        code: "config.unknown-key",
+        file: CONFIG_FILE_NAME,
+        message: `Unsupported key \`${key}\` in ${CONFIG_FILE_NAME}. Supported keys: ignoredDirs.`,
       });
     }
 

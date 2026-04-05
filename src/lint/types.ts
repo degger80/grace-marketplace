@@ -1,8 +1,5 @@
 export type LintSeverity = "error" | "warning";
 
-export type RepoProfile = "auto" | "current" | "legacy";
-export type EffectiveProfile = Exclude<RepoProfile, "auto">;
-
 export type ModuleRole = "RUNTIME" | "TEST" | "BARREL" | "CONFIG" | "TYPES" | "SCRIPT";
 export type MapMode = "EXPORTS" | "LOCALS" | "SUMMARY" | "NONE";
 
@@ -16,7 +13,6 @@ export type LintIssue = {
 
 export type LintResult = {
   root: string;
-  profile: EffectiveProfile;
   filesChecked: number;
   governedFiles: number;
   xmlFilesChecked: number;
@@ -25,11 +21,9 @@ export type LintResult = {
 
 export type LintOptions = {
   allowMissingDocs?: boolean;
-  profile?: RepoProfile;
 };
 
 export type GraceLintConfig = {
-  profile?: RepoProfile;
   ignoredDirs?: string[];
 };
 

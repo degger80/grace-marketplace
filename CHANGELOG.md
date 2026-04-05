@@ -6,6 +6,13 @@ The format is inspired by Keep a Changelog, and this project follows Semantic Ve
 
 This changelog currently starts at `1.3.0`. Earlier history is available in the git log.
 
+## [3.3.0] - 2026-04-05
+
+### Changed
+
+- Removed profile selection from `grace lint`; it now validates only against the current GRACE artifact set.
+- Limited `.grace-lint.json` to the current schema and reject unknown keys instead of carrying compatibility paths for unused legacy config.
+
 ## [3.2.0] - 2026-04-05
 
 ### Changed

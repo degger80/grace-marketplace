@@ -10,13 +10,13 @@ This repository packages GRACE as reusable skills for coding agents. The current
 - knowledge-graph synchronization
 - controller-managed sequential or multi-agent implementation
 
-Current packaged version: `3.2.0`
+Current packaged version: `3.3.0`
 
 ## What Changed In This Version
 
-- Documented the published Bun-powered `grace` CLI more explicitly across skills and repo context.
-- Added `grace lint` guidance as a fast integrity preflight alongside reviewer, refresh, and status workflows.
-- Updated the public install example to use `bun add -g @osovv/grace-cli`.
+- Removed profile selection from `grace lint`; the CLI now validates only against the current GRACE artifact set.
+- Limited `.grace-lint.json` to the current config schema, such as `ignoredDirs`.
+- Kept the role-aware/adaptive lint model while making older GRACE repos fail loudly until they are updated.
 
 ## Repository Layout
 
@@ -215,16 +215,11 @@ Optional repository config file:
 
 ```json
 {
-  "profile": "auto",
   "ignoredDirs": ["tmp"]
 }
 ```
 
-Profiles:
-
-- `auto` => require `docs/verification-plan.xml` only when the repo already looks verification-aware
-- `current` => require current GRACE artifacts
-- `legacy` => allow older GRACE repos without a verification plan
+`grace lint` is current-only. Older GRACE repositories should fail until they are updated to the current artifact set, especially `docs/verification-plan.xml`.
 
 The validator checks marketplace/plugin metadata sync, version consistency, required fields, `.claude-plugin` structure, and hardcoded absolute paths. In branch or PR context it scopes validation to changed plugins via `git diff origin/main...HEAD`; otherwise it validates all plugins.
 

@@ -1,7 +1,6 @@
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "bun:test";
 
 import { lintGraceProject } from "./grace-lint";
@@ -18,7 +17,7 @@ function writeProjectFile(root: string, relativePath: string, contents: string) 
   writeFileSync(filePath, contents);
 }
 
-function writeLegacyDocs(root: string) {
+function writeBaseDocsWithoutVerification(root: string) {
   writeProjectFile(
     root,
     "docs/knowledge-graph.xml",
@@ -126,7 +125,7 @@ function writeCurrentDocs(root: string) {
 }
 
 describe("lintGraceProject", () => {
-  it("passes a well-formed current-profile GRACE project", () => {
+  it("passes a well-formed current GRACE project", () => {
     const root = createProject();
     writeCurrentDocs(root);
 
@@ -164,7 +163,6 @@ export function run() {
     );
 
     const result = lintGraceProject(root);
-    expect(result.profile).toBe("current");
     expect(result.issues).toHaveLength(0);
   });
 
@@ -416,7 +414,7 @@ export const exportedValue = helperState;
 
   it("recognizes Clojure-style semicolon markup comments", () => {
     const root = createProject();
-    writeLegacyDocs(root);
+    writeCurrentDocs(root);
 
     writeProjectFile(
       root,
@@ -474,9 +472,9 @@ export { run };
     expect(result.issues.filter((issue) => issue.file === "src/local-export-list.ts")).toHaveLength(0);
   });
 
-  it("auto-detects the legacy profile when verification artifacts are absent and no verification refs are used", () => {
+  it("requires verification artifacts even when the repo only has base docs", () => {
     const root = createProject();
-    writeLegacyDocs(root);
+    writeBaseDocsWithoutVerification(root);
 
     writeProjectFile(
       root,
@@ -503,11 +501,10 @@ export function run() {
     );
 
     const result = lintGraceProject(root);
-    expect(result.profile).toBe("legacy");
-    expect(result.issues).toHaveLength(0);
+    expect(result.issues.map((issue) => issue.code)).toContain("docs.missing-required-artifact");
   });
 
-  it("requires verification artifacts in current profile when verification refs are present", () => {
+  it("requires verification artifacts when verification refs are present", () => {
     const root = createProject();
 
     writeProjectFile(
@@ -534,43 +531,24 @@ export function run() {
     );
 
     const result = lintGraceProject(root);
-    expect(result.profile).toBe("current");
     expect(result.issues.map((issue) => issue.code)).toContain("docs.missing-required-artifact");
   });
 
-  it("reports invalid profile selections without crashing", () => {
+  it("rejects unknown keys in .grace-lint.json", () => {
     const root = createProject();
-    writeCurrentDocs(root);
-
-    const result = lintGraceProject(root, { profile: "unsupported" as never });
-    expect(result.issues.map((issue) => issue.code)).toContain("config.invalid-profile-selection");
-  });
-
-  it("falls back safely when .grace-lint.json contains an invalid profile", () => {
-    const root = createProject();
-    writeLegacyDocs(root);
+    writeBaseDocsWithoutVerification(root);
     writeProjectFile(root, ".grace-lint.json", JSON.stringify({ profile: "broken" }, null, 2));
 
     const result = lintGraceProject(root);
-    expect(result.profile).toBe("legacy");
-    expect(result.issues.map((issue) => issue.code)).toContain("config.invalid-profile");
+    expect(result.issues.map((issue) => issue.code)).toContain("config.unknown-key");
   });
 
-  it("reports invalid profile selections through the CLI path", () => {
+  it("allows .grace-lint.json with only ignoredDirs", () => {
     const root = createProject();
     writeCurrentDocs(root);
+    writeProjectFile(root, ".grace-lint.json", JSON.stringify({ ignoredDirs: ["tmp"] }, null, 2));
 
-    const run = spawnSync(
-      "bun",
-      ["run", "./src/grace.ts", "lint", "--path", root, "--profile", "broken", "--format", "json"],
-      {
-        cwd: process.cwd(),
-        encoding: "utf8",
-      },
-    );
-
-    const parsed = JSON.parse(run.stdout);
-    expect(run.status).toBe(1);
-    expect(parsed.issues.map((issue: { code: string }) => issue.code)).toContain("config.invalid-profile-selection");
+    const result = lintGraceProject(root);
+    expect(result.issues).toHaveLength(0);
   });
 });
