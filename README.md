@@ -1,110 +1,75 @@
-# GRACE Framework - AI Agent Skills
+# GRACE Marketplace and CLI
 
-**GRACE** (Graph-RAG Anchored Code Engineering) is a methodology for AI-driven code generation with semantic markup, knowledge graphs, contracts, and log-driven verification. Originally created by **Vladimir Ivanov** ([@turboplanner](https://t.me/turboplanner)).
+**GRACE** means **Graph-RAG Anchored Code Engineering**: a contract-first AI engineering methodology built around semantic markup, shared XML artifacts, verification planning, and knowledge-graph navigation.
 
-This repository packages GRACE as reusable skills for coding agents. The current workflow is opinionated around:
-
-- contract-first planning
-- verification-first execution
-- semantic markup for navigation and patching
-- knowledge-graph synchronization
-- controller-managed sequential or multi-agent implementation
+This repository ships the GRACE skills plus the optional `grace` CLI. It is a packaging and distribution repository, not an end-user application.
 
 Current packaged version: `3.6.0`
 
-## What Changed In This Version
+## What This Repository Ships
 
-- Added `grace module find`, `grace module show`, and `grace file show` so the CLI can act as a GRACE-aware read/query layer over shared XML artifacts and file-local markup.
-- Clarified across the shipped skills when to use `grace lint`, `grace module show`, and `grace file show` to move between public shared-doc context and private file-local context.
-- Kept `grace lint` as the fast integrity gate while expanding the CLI into context navigation for agents and humans.
+- Canonical GRACE skills in `skills/grace/*`
+- Packaged Claude marketplace mirror in `plugins/grace/skills/grace/*`
+- Marketplace metadata in `.claude-plugin/marketplace.json`
+- Packaged plugin manifest in `plugins/grace/.claude-plugin/plugin.json`
+- OpenPackage metadata in `openpackage.yml`
+- Optional Bun-powered CLI package `@osovv/grace-cli`
 
-## Repository Layout
+The published CLI currently gives you:
 
-- `skills/grace/` - Agent Skills format
-- `.claude-plugin/` - Claude Code marketplace packaging
-- `openpackage.yml` - OpenPackage metadata
+- `grace lint` for integrity checks
+- `grace module find` for module resolution across shared docs and file-local markup
+- `grace module show` for shared/public module context
+- `grace file show` for file-local/private implementation context
 
-## Installation
+## Why GRACE
 
-### Via OpenPackage (recommended)
+GRACE is designed for AI-assisted engineering where agents need stable navigation, explicit contracts, and reusable verification evidence.
 
-Install the [OpenPackage CLI](https://github.com/enulus/OpenPackage) first (`npm install -g opkg`), then:
+Core ideas:
+
+- shared artifacts define the public module boundary
+- file-local markup defines private implementation detail
+- contracts describe expected behavior before code changes spread
+- verification is planned, named, and reused instead of improvised per task
+- semantic blocks give agents precise read and patch targets
+
+This makes it easier to:
+
+- plan modules and execution order
+- hand work across agents without losing context
+- review for drift between code, graph, and verification
+- debug failures from named blocks and planned evidence
+
+GRACE was designed by Vladimir Ivanov ([@turboplanner](https://t.me/turboplanner)).
+
+## Install
+
+### OpenPackage
 
 ```bash
-# Install GRACE to your workspace
 opkg install gh@osovv/grace-marketplace
-
-# Or install globally
 opkg install gh@osovv/grace-marketplace -g
-
-# Install only specific resource types
-opkg install gh@osovv/grace-marketplace -s
-opkg install gh@osovv/grace-marketplace -a
-
-# Install to a specific platform
 opkg install gh@osovv/grace-marketplace --platforms claude-code
-opkg install gh@osovv/grace-marketplace --platforms cursor
-opkg install gh@osovv/grace-marketplace --platforms opencode
 ```
 
-### Via Claude Code Plugin Marketplace
+### Claude Code Marketplace
 
 ```bash
 /plugin marketplace add osovv/grace-marketplace
 /plugin install grace@grace-marketplace
 ```
 
-### Via npx skills (Vercel Skills CLI)
+### Bun CLI
 
-```bash
-npx skills add osovv/grace-marketplace
-npx skills add osovv/grace-marketplace -g
-npx skills add osovv/grace-marketplace -a claude-code
-```
-
-> Browse more skills at [skills.sh](https://skills.sh)
-
-### Via Bun (CLI)
-
-Requires `bun` on `PATH`. The published CLI keeps the Bun shebang and installs the `grace` binary.
+Requires `bun` on `PATH`.
 
 ```bash
 bun add -g @osovv/grace-cli
 grace lint --path /path/to/grace-project
 ```
 
-### Via Codex CLI
-
-Inside Codex, use the built-in skill installer:
-
-```text
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace/grace-init
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace/grace-plan
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace/grace-execute
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace/grace-multiagent-execute
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace/grace-refactor
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace/grace-setup-subagents
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace/grace-fix
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace/grace-refresh
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace/grace-status
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace/grace-ask
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace/grace-explainer
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace/grace-verification
-$skill-installer install https://github.com/osovv/grace-marketplace/tree/main/skills/grace/grace-reviewer
-```
-
-After installation, restart Codex to activate the skills.
-
-### Via Kilo Code
-
-Copy skills to your Kilo Code skills directory:
-
-```bash
-git clone https://github.com/osovv/grace-marketplace
-cp -r grace-marketplace/skills/grace/grace-* ~/.kilocode/skills/
-```
-
-### Any Agent Skills-compatible agent
+### Agent Skills-Compatible Install
 
 ```bash
 git clone https://github.com/osovv/grace-marketplace
@@ -113,152 +78,200 @@ cp -r grace-marketplace/skills/grace/grace-* /path/to/your/agent/skills/
 
 ## Quick Start
 
+For a new GRACE project:
+
+1. Run `$grace-init`
+2. Fill `docs/requirements.xml` and `docs/technology.xml`
+3. Run `$grace-plan`
+4. Run `$grace-verification`
+5. Run `$grace-execute` or `$grace-multiagent-execute`
+
+For an existing GRACE project, the CLI is often the fastest way to orient yourself:
+
 ```bash
-# 1. Bootstrap GRACE docs and templates
-/grace-init
+# Integrity gate
+grace lint --path /path/to/project
 
-# 2. Fill requirements.xml and technology.xml
+# Resolve the relevant module
+grace module find auth --path /path/to/project
+grace module find src/provider/config-repo.ts --path /path/to/project --json
 
-# 3. Plan modules, flows, graph, and verification refs
-/grace-plan
+# Read shared/public context
+grace module show M-AUTH --path /path/to/project
+grace module show M-AUTH --path /path/to/project --with verification
 
-# 4. Deepen testing, traces, and log-driven evidence
-/grace-verification
-
-# 5a. Execute the plan sequentially
-/grace-execute
-
-# 5b. Execute in parallel-safe waves
-/grace-multiagent-execute
+# Read file-local/private context
+grace file show src/auth/index.ts --path /path/to/project
+grace file show src/auth/index.ts --path /path/to/project --contracts --blocks
 ```
 
-`/grace-multiagent-execute` supports `safe`, `balanced`, and `fast` controller profiles. Use `balanced` by default, `safe` for risky or weakly verified modules, and `fast` only when module-local and wave-level verification are already strong.
+## Skills Overview
 
-## Core Artifacts
-
-- `docs/requirements.xml` - product intent and use cases
-- `docs/technology.xml` - runtime, tooling, testing, observability, constraints
-- `docs/development-plan.xml` - modules, contracts, flows, phases, execution ownership
-- `docs/verification-plan.xml` - tests, traces, required log markers, and gates
-- `docs/knowledge-graph.xml` - project navigation graph
-- `docs/operational-packets.xml` - canonical execution packet, delta, and failure handoff templates
-
-## Skills
-
-| Skill | Description |
-|---|---|
-| `grace-init` | Bootstrap GRACE docs, AGENTS, and XML templates |
-| `grace-plan` | Architect modules, flows, knowledge graph, and verification refs |
-| `grace-verification` | Design and maintain tests, traces, and log-driven evidence |
-| `grace-execute` | Execute the full plan sequentially with scoped review and commits |
-| `grace-multiagent-execute` | Execute independent modules in controller-managed parallel waves |
-| `grace-refactor` | Refactor modules safely while keeping contracts, graph, and verification synchronized |
+| Skill | Purpose |
+| --- | --- |
+| `grace-init` | Bootstrap the GRACE docs, templates, and agent guidance |
+| `grace-plan` | Design modules, phases, flows, dependencies, and contracts |
+| `grace-verification` | Build and maintain `verification-plan.xml`, tests, traces, and log evidence |
+| `grace-execute` | Execute the plan sequentially with scoped review and commits |
+| `grace-multiagent-execute` | Execute parallel-safe waves with controller-managed synchronization |
+| `grace-refactor` | Rename, move, split, merge, and extract modules without shared-artifact drift |
+| `grace-fix` | Debug issues from graph, contracts, tests, traces, and semantic blocks |
+| `grace-refresh` | Refresh graph and verification artifacts against the real codebase |
+| `grace-reviewer` | Review semantic integrity, graph consistency, and verification quality |
+| `grace-status` | Report overall project health and suggest the next safe action |
+| `grace-ask` | Answer architecture and implementation questions from project artifacts |
+| `grace-explainer` | Explain the GRACE methodology itself |
 | `grace-setup-subagents` | Scaffold shell-specific GRACE worker and reviewer presets |
-| `grace-fix` | Debug via semantic navigation, tests, and log markers |
-| `grace-refresh` | Sync shared artifacts with the real codebase |
-| `grace-status` | Project health report across docs, graph, and verification |
-| `grace-ask` | Answer questions with full project context |
-| `grace-explainer` | Complete GRACE methodology reference |
-| `grace-reviewer` | Validate semantic markup, contracts, graph, and verification integrity |
 
-## Compatibility
+## CLI Overview
 
-| Agent | Installation | Format |
-|---|---|---|
-| **Any (via OpenPackage)** | `opkg install` | OpenPackage (`openpackage.yml`) |
-| **Claude Code** | `/plugin install` or `npx skills add` | Native plugin (`.claude-plugin/`) |
-| **Codex CLI** | `$skill-installer` | Agent Skills (`skills/`) |
-| **Kilo Code** | Copy to `~/.kilocode/skills/` | Agent Skills (`skills/`) |
-| **Cursor, Windsurf, etc.** | `opkg install --platforms <name>` | OpenPackage (`openpackage.yml`) |
-| **Other agents** | Copy to agent's skills directory | Agent Skills (`skills/`) |
+| Command | What It Does |
+| --- | --- |
+| `grace lint --path <root>` | Validate current GRACE artifacts, semantic markup, unique XML tags, and export/map drift |
+| `grace module find <query> --path <root>` | Search by module ID, name, path, purpose, annotations, dependency IDs, verification IDs, and `LINKS` |
+| `grace module show <id-or-path> --path <root>` | Show the shared/public module record from plan, graph, steps, and linked files |
+| `grace module show <id> --with verification --path <root>` | Include verification excerpt when a `V-M-*` entry exists |
+| `grace file show <path> --path <root>` | Show file-local `MODULE_CONTRACT`, `MODULE_MAP`, and `CHANGE_SUMMARY` |
+| `grace file show <path> --contracts --blocks --path <root>` | Include scoped contracts and semantic block navigation |
 
-All skills follow the [Agent Skills](https://agentskills.io) open standard and the [OpenPackage](https://github.com/enulus/OpenPackage) specification.
+Current output modes:
 
-## Development
+- `grace lint`: `text`, `json`
+- `grace module find`: `table`, `json`
+- `grace module show`: `text`, `json`
+- `grace file show`: `text`, `json`
 
-Run the marketplace validator from the repository root:
+## Public Shared Docs vs File-Local Markup
+
+GRACE works best when shared docs stay public and stable, while private detail stays close to code.
+
+Use shared XML artifacts for:
+
+- module IDs and module boundaries
+- public module contracts and public interfaces
+- dependencies and execution order
+- verification entries, commands, scenarios, and required markers
+- project-level flows and phases
+
+Use file-local markup for:
+
+- `MODULE_CONTRACT`
+- `MODULE_MAP`
+- `CHANGE_SUMMARY`
+- function and type contracts
+- semantic block boundaries
+- implementation-only helpers and orchestration details
+
+Rule of thumb:
+
+- `grace module show` is the shared/public truth
+- `grace file show` is the file-local/private truth
+
+## Core GRACE Artifacts
+
+| Artifact | Role |
+| --- | --- |
+| `docs/requirements.xml` | Product intent, scope, use cases, and requirements |
+| `docs/technology.xml` | Stack, tooling, constraints, runtime, and testing choices |
+| `docs/development-plan.xml` | Modules, contracts, implementation order, phases, and flows |
+| `docs/verification-plan.xml` | Verification entries, test commands, scenarios, and required markers |
+| `docs/knowledge-graph.xml` | Module map, dependencies, public annotations, and navigation graph |
+| `docs/operational-packets.xml` | Canonical execution packet, delta, and failure handoff templates |
+| `src/**/*` and `tests/**/*` with GRACE markup | File-local module context, contracts, and semantic block boundaries |
+
+## Typical Workflows
+
+### Bootstrap a New Project
+
+```text
+$grace-init
+fill requirements.xml and technology.xml
+$grace-plan
+$grace-verification
+$grace-execute or $grace-multiagent-execute
+```
+
+### Inspect One Module Quickly
+
+```text
+grace module find <name-or-path>
+grace module show M-XXX --with verification
+grace file show <governed-file> --contracts --blocks
+```
+
+### Review or Refresh After Code Drift
+
+```text
+grace lint --path <project-root>
+$grace-reviewer
+$grace-refresh
+```
+
+### Debug a Failing Flow
+
+```text
+grace module find <error-or-path>
+grace module show M-XXX --with verification
+grace file show <governed-file> --contracts --blocks
+$grace-fix
+```
+
+## Repository Layout
+
+| Path | Purpose |
+| --- | --- |
+| `skills/grace/*` | Canonical skill sources |
+| `plugins/grace/skills/grace/*` | Packaged mirror used for marketplace distribution |
+| `.claude-plugin/marketplace.json` | Marketplace entry and published skill set |
+| `plugins/grace/.claude-plugin/plugin.json` | Packaged plugin manifest |
+| `src/grace.ts` | CLI entrypoint |
+| `src/grace-lint.ts` | `grace lint` command |
+| `src/grace-module.ts` | `grace module find/show` commands |
+| `src/grace-file.ts` | `grace file show` command |
+| `src/query/*` | Artifact loader, index, and render layer for CLI queries |
+| `scripts/validate-marketplace.ts` | Packaging and release validation |
+
+## For Maintainers
+
+- Treat `skills/grace/*` as the source of truth unless the task is explicitly about packaged output.
+- Keep `plugins/grace/skills/grace/*` synchronized with the canonical skill files.
+- Keep versions synchronized across `README.md`, `package.json`, `openpackage.yml`, `.claude-plugin/marketplace.json`, and `plugins/grace/.claude-plugin/plugin.json`.
+- Validate packaging changes with `bun run ./scripts/validate-marketplace.ts`.
+- Validate CLI changes with `bun run ./src/grace.ts lint --path . --allow-missing-docs` and `bun test`.
+- Do not assume every directory under `skills/grace/` is published; the actual shipped set is declared in `.claude-plugin/marketplace.json`.
+
+## Development and Validation
+
+Install dependencies:
+
+```bash
+bun install
+```
+
+Run the test suite:
+
+```bash
+bun test
+```
+
+Run the CLI against the repository itself:
+
+```bash
+bun run ./src/grace.ts lint --path . --allow-missing-docs
+```
+
+Run marketplace and packaging validation:
 
 ```bash
 bun run ./scripts/validate-marketplace.ts
 ```
 
-Run the GRACE lint CLI against a GRACE project:
+Smoke test the query layer against a real GRACE project:
 
 ```bash
-bun install
-bun run grace lint --path /path/to/grace-project
+bun run ./src/grace.ts module show M-AUTH --path /path/to/grace-project --with verification
+bun run ./src/grace.ts file show src/auth/index.ts --path /path/to/grace-project --contracts --blocks
 ```
-
-Query GRACE artifacts from the CLI:
-
-```bash
-# Search modules across shared docs and linked file-local markup
-bun run grace module find auth --path /path/to/grace-project
-bun run grace module find src/provider/config-repo.ts --path /path/to/grace-project --json
-
-# Show the shared/public module record
-bun run grace module show M-AUTH --path /path/to/grace-project
-bun run grace module show M-AUTH --path /path/to/grace-project --with verification
-
-# Show file-local/private markup
-bun run grace file show src/provider/config-repo.ts --path /path/to/grace-project
-bun run grace file show src/provider/config-repo.ts --path /path/to/grace-project --contracts --blocks
-```
-
-The lint command is role-aware and adapter-aware:
-
-- structural checks stay language-agnostic
-- export-map parity uses language adapters where available
-- file behavior is driven by semantic roles instead of filename masks
-
-Current rich adapters:
-
-- TypeScript/JavaScript via the TypeScript compiler API
-- Python via the Python standard-library AST, without `pyright`
-
-Current adapter behavior:
-
-- TypeScript/JavaScript export analysis is treated as exact
-- Python export analysis is exact when `__all__` is explicit, otherwise heuristic
-- other languages still benefit from structural GRACE checks even when rich export analysis is not available yet
-
-The query commands follow the GRACE public/private split:
-
-- `grace module show` reads shared/public module contracts, interfaces, dependencies, steps, and verification excerpts from the XML artifacts.
-- `grace file show` reads file-local/private `MODULE_CONTRACT`, `MODULE_MAP`, `CHANGE_SUMMARY`, scoped contracts, and semantic blocks.
-- `grace module find` searches both planes, including shared docs and linked file-local paths via `LINKS`.
-
-Optional `MODULE_CONTRACT` fields for linting:
-
-```text
-ROLE: RUNTIME | TEST | BARREL | CONFIG | TYPES | SCRIPT
-MAP_MODE: EXPORTS | LOCALS | SUMMARY | NONE
-```
-
-Default behavior:
-
-- `RUNTIME` => strict export parity when a language adapter is available
-- `TEST` => `MODULE_MAP` describes important locals, fixtures, and helpers instead of exports
-- `BARREL` => `MODULE_MAP` can summarize aggregated exports
-- `CONFIG` => export parity is skipped by default
-- `TYPES` => type export surfaces are checked when the adapter supports them
-- `SCRIPT` => `MODULE_MAP` describes important local entry points and helpers instead of exports
-
-Optional repository config file:
-
-```json
-{
-  "ignoredDirs": ["tmp"]
-}
-```
-
-`grace lint` is current-only. Older GRACE repositories should fail until they are updated to the current artifact set, especially `docs/verification-plan.xml`.
-
-The validator checks marketplace/plugin metadata sync, version consistency, required fields, `.claude-plugin` structure, and hardcoded absolute paths. In branch or PR context it scopes validation to changed plugins via `git diff origin/main...HEAD`; otherwise it validates all plugins.
-
-## Origin
-
-GRACE was designed and battle-tested by Vladimir Ivanov ([@turboplanner](https://t.me/turboplanner)). See the [TurboProject](https://t.me/turboproject) Telegram channel for more on the methodology. This repository extracts GRACE into a standalone, project-agnostic format.
 
 ## License
 
