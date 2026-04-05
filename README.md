@@ -64,12 +64,12 @@ npx skills add osovv/grace-marketplace -a claude-code
 
 > Browse more skills at [skills.sh](https://skills.sh)
 
-### Via npm (CLI)
+### Via Bun (CLI)
 
 Requires `bun` on `PATH`. The published CLI keeps the Bun shebang and installs the `grace` binary.
 
 ```bash
-npm install -g @osovv/grace-cli
+bun add -g @osovv/grace-cli
 grace lint --path /path/to/grace-project
 ```
 
