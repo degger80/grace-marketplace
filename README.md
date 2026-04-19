@@ -4,7 +4,7 @@
 
 This repository ships the GRACE skills plus the optional `grace` CLI. It is a packaging and distribution repository, not an end-user application.
 
-Current packaged version: `3.7.0`
+Current packaged version: `3.8.0`
 
 ## What This Repository Ships
 
@@ -18,6 +18,8 @@ Current packaged version: `3.7.0`
 The published CLI currently gives you:
 
 - `grace lint` for integrity checks
+- `grace lint --profile autonomous` for autonomy-readiness checks
+- `grace status` for project health, autonomy gate, and next-action guidance
 - `grace module find` for module resolution across shared docs and file-local markup
 - `grace module show` for shared/public module context
 - `grace file show` for file-local/private implementation context
@@ -33,6 +35,14 @@ Core ideas:
 - contracts describe expected behavior before code changes spread
 - verification is planned, named, and reused instead of improvised per task
 - semantic blocks give agents precise read and patch targets
+- execution packets, checkpoints, and failure handoffs make long autonomous runs recoverable
+- preferred stacks and named surfaces keep agents inside high-reliability project conventions
+
+GRACE is process-first, not prompt-first:
+
+- do more work before launch so the agent has less ambiguity during execution
+- give the agent named contracts, flows, markers, and checkpoints instead of abstract exhortations
+- treat autonomy as a governed execution mode that must pass an explicit readiness gate
 
 This makes it easier to:
 
@@ -97,13 +107,19 @@ For a new GRACE project:
 2. Design `docs/requirements.xml` and `docs/technology.xml` together with your agent
 3. Run `$grace-plan`
 4. Run `$grace-verification`
-5. Run `$grace-execute` or `$grace-multiagent-execute`
+5. Run `grace lint --profile autonomous --path /path/to/project`
+6. Run `grace status --path /path/to/project`
+7. Run `$grace-execute` or `$grace-multiagent-execute`
 
 For an existing GRACE project, the CLI is often the fastest way to orient yourself:
 
 ```bash
 # Integrity gate
 grace lint --path /path/to/project
+grace lint --profile autonomous --path /path/to/project
+
+# Health + next action
+grace status --path /path/to/project
 
 # Resolve the relevant module
 grace module find auth --path /path/to/project
@@ -142,6 +158,8 @@ grace file show src/auth/index.ts --path /path/to/project --contracts --blocks
 | Command | What It Does |
 | --- | --- |
 | `grace lint --path <root>` | Validate current GRACE artifacts, semantic markup, unique XML tags, and export/map drift |
+| `grace lint --profile autonomous --path <root>` | Enforce autonomy readiness for execution packets, verification coverage, observable evidence, and operational-packet presence |
+| `grace status --path <root>` | Report artifact health, codebase metrics, integrity snapshot, autonomy gate, recent changes, and the next safe action |
 | `grace module find <query> --path <root>` | Search by module ID, name, path, purpose, annotations, dependency IDs, verification IDs, and `LINKS` |
 | `grace module show <id-or-path> --path <root>` | Show the shared/public module record from plan, graph, steps, and linked files |
 | `grace module show <id> --with verification --path <root>` | Include verification excerpt when a `V-M-*` entry exists |
@@ -151,9 +169,20 @@ grace file show src/auth/index.ts --path /path/to/project --contracts --blocks
 Current output modes:
 
 - `grace lint`: `text`, `json`
+- `grace status`: `text`, `json`
 - `grace module find`: `table`, `json`
 - `grace module show`: `text`, `json`
 - `grace file show`: `text`, `json`
+
+## Agentic Reliability
+
+GRACE 3.8 pushes more of the autonomous-execution discipline into the product surface:
+
+- `grace lint --profile autonomous` acts as a cheap readiness gate before long runs
+- `grace status` surfaces whether the project is healthy enough for execution or needs planning, verification, or refresh work first
+- `technology.xml` should name preferred stacks, test tools, and observability surfaces so workers stay on approved, high-reliability paths
+- `operational-packets.xml` should define assumptions, stop conditions, retry budgets, and checkpoint fields so workers can stop or replan without hidden reasoning
+- semantic anchoring matters: meaningful module names, block names, contracts, and examples are better agent guidance than abstract IDs or vague prompts
 
 ## Public Shared Docs vs File-Local Markup
 
@@ -217,6 +246,7 @@ grace file show <governed-file> --contracts --blocks
 
 ```text
 grace lint --path <project-root>
+grace status --path <project-root>
 $grace-reviewer
 $grace-refresh
 ```

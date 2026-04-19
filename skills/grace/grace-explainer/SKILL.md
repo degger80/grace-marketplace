@@ -30,6 +30,8 @@ Operational Packets (docs/operational-packets.xml)
     standardizes execution packets, deltas, and failure handoff
 ```
 
+GRACE is process-first, not prompt-first. The point is to make good execution boring: define the contract, name the surfaces, plan verification, and give the worker a bounded packet before asking it to run.
+
 ## Six Core Principles
 
 ### 1. Never Write Code Without a Contract
@@ -58,6 +60,16 @@ Testing, traces, and log markers are not cleanup work. They are part of the arch
 - **Metrics**: the contract plus verification evidence tell you if you're done
 
 You have freedom in HOW, not in WHAT. If a contract seems wrong — propose a change, don't silently deviate.
+
+## Semantic Anchoring
+
+GRACE assumes that agents work better when the code and artifacts carry domain meaning directly.
+
+- prefer `CustomerProfile`, `ArchiveDatabase`, `ValidateInput`, and `BLOCK_ASSIGN_TITLE` over abstract placeholders or opaque IDs
+- keep PURPOSE, SCOPE, and scenario text concrete enough that they describe the transformation, not just the file boundary
+- if a rule is subtle, place a compact example in verification or notes rather than hoping an agent will infer the edge case from vague prose
+
+This does not replace contracts. It makes contracts easier for agents to execute accurately.
 
 ## How the Elements Connect
 
@@ -88,6 +100,8 @@ GRACE also has an optional CLI package, `@osovv/grace-cli`, which installs the `
 
 Current public commands:
 - `grace lint --path /path/to/project`
+- `grace lint --profile autonomous --path /path/to/project`
+- `grace status --path /path/to/project`
 - `grace module find auth --path /path/to/project`
 - `grace module show M-AUTH --path /path/to/project --with verification`
 - `grace file show src/auth/index.ts --path /path/to/project --contracts --blocks`
@@ -96,6 +110,7 @@ Use the CLI for:
 - GRACE semantic markup pairing and completeness
 - unique-tag convention anti-patterns in XML
 - graph/plan/verification reference mismatches
+- autonomy-readiness gaps in packet quality, verification depth, and observable evidence
 - MODULE_MAP vs export drift in supported source files
 - resolving module IDs from names, paths, dependencies, and verification refs
 - reading shared/public module context from the XML artifacts
@@ -107,6 +122,11 @@ Public/private split:
 - `grace module find` searches both planes, including `LINKS` from file-local markup
 
 The CLI does not replace `$grace-reviewer`, `$grace-refresh`, or `$grace-verification`. It is a cheap automated guardrail before or alongside those higher-context workflows.
+
+Typical preflight:
+- `grace status` for the current health snapshot and next action
+- `grace lint` for structural drift
+- `grace lint --profile autonomous` before long autonomous execution
 
 ## Development Workflow
 

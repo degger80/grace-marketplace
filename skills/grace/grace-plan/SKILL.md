@@ -32,6 +32,20 @@ Classify each module as one of:
 - **UTILITY** — shared helpers, configuration, logging
 - **INTEGRATION** — external service adapters
 
+### Semantic Anchoring
+Favor semantically rich module, function, flow, and block names.
+
+- prefer names that carry domain meaning over abstract IDs or arbitrary placeholders
+- make PURPOSE and SCOPE fields concrete enough that a worker can infer intent without guessing
+- when a rule is subtle, include one or two compact examples in notes or verification scenarios instead of relying on a vague prose rule
+
+### Reliability-First Stack Selection
+Use `docs/technology.xml` to define an approved implementation stack for agents.
+
+- name the preferred runtime libraries, test tools, logging stack, and framework surfaces explicitly
+- note discouraged or non-default libraries when they would weaken autonomous reliability
+- plan around tools and abstractions that the team is actually willing to verify and maintain
+
 ### Knowledge Graph Design
 Structure `docs/knowledge-graph.xml` for maximum navigability:
 - Each module gets a unique ID tag: `M-xxx NAME="..." TYPE="..."`
@@ -65,6 +79,7 @@ Propose a module breakdown. For each module, define:
 - Dependencies on other modules
 - Key public interfaces (what the module exposes to other modules or callers)
 - Tentative source path, test path, and `verification-ref`
+- Semantic anchors the worker should reuse: module naming, function naming, and critical block names
 
 Present this to the user as a structured list and **wait for approval** before proceeding.
 
@@ -75,6 +90,7 @@ Before finalizing the plan, derive the first verification draft:
 - list the most important success and failure scenarios
 - identify required log markers or trace evidence for critical branches
 - note module-local checks plus any wave-level or phase-level follow-up
+- define stop conditions or replan triggers for the highest-risk modules so execution can halt cleanly instead of drifting
 
 Present this verification draft to the user as part of the same approval checkpoint. If the verification story is weak, revise the architecture before proceeding.
 
@@ -92,9 +108,10 @@ Present the walkthrough to the user. If issues are found — revise the architec
 After user approval:
 
 1. Update `docs/development-plan.xml` with the full module breakdown, public module contracts, target paths, observability notes, data flows, and implementation order. Use unique ID-based tags: `M-xxx` for modules, `Phase-N` for phases, `DF-xxx` for flows, `step-N` for steps, and `V-M-xxx` references for verification.
-2. Update `docs/verification-plan.xml` with global verification policy, critical flows, module verification stubs, and phase gates.
+2. Update `docs/verification-plan.xml` with global verification policy, critical flows, module verification stubs, autonomy-gate evidence, and phase gates.
 3. Update `docs/knowledge-graph.xml` with all modules (as `M-xxx` tags), their public-interface annotations (as `fn-name`, `type-Name`, etc.), `verification-ref` links, and CrossLinks between them.
-4. Print: "Architecture approved. Run `$grace-verification` to deepen tests and trace expectations, `$grace-execute` for sequential execution, or `$grace-multiagent-execute` for parallel-safe waves."
+4. Ensure `docs/technology.xml` explicitly names the preferred stack and observability surfaces the worker should stay inside.
+5. Print: "Architecture approved. Run `$grace-verification` to deepen tests and trace expectations, `grace lint --profile autonomous` to check execution readiness, `$grace-execute` for sequential execution, or `$grace-multiagent-execute` for parallel-safe waves."
 
 ## Important
 - Do NOT generate any code during this phase
@@ -105,6 +122,6 @@ After user approval:
 Always produce:
 1. Module breakdown table (ID, name, type, purpose, dependencies, target paths, verification ref)
 2. Data flow diagrams (textual)
-3. Verification surface overview (critical flows, module-local checks, log or trace anchors)
+3. Verification surface overview (critical flows, module-local checks, log or trace anchors, stop conditions)
 4. Implementation order (phased, with dependency justification)
-5. Risk assessment (what could go wrong)
+5. Risk assessment (what could go wrong, and what should stop or replan execution)

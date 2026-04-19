@@ -14,6 +14,8 @@ That proof has three layers:
 2. trace or log assertions for execution trajectory
 3. phase-level or integration checks for merged surfaces
 
+For long autonomous runs, verification is also an autonomy gate. It must prove that another agent can continue or debug from the visible evidence instead of from hidden reasoning.
+
 ## Verification Plan Structure
 
 Typical sections:
@@ -81,6 +83,17 @@ logger.info("[ChatDomain][createChat][BLOCK_INSERT_CHAT] Chat created", {
 - **Phase level**: broader regression and integrity gates
 
 Execution packets in `grace-execute` and `grace-multiagent-execute` should reuse these levels instead of inventing new checks ad hoc.
+
+## Autonomy Gate
+
+Before sending a module to a longer autonomous run, check:
+
+1. a `V-M-xxx` entry exists for the module
+2. at least one module-local command exists
+3. success and failure scenarios are named
+4. required log markers or trace assertions make divergence observable
+5. wave-level or phase-level follow-up is named when module-local checks are not enough
+6. operational packets or checkpoint reports capture assumptions, stop conditions, and next action
 
 ## Failure Packets
 

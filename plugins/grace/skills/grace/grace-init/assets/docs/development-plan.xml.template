@@ -61,10 +61,10 @@
 
   <ImplementationOrder>
     <!-- Phases use unique tags:
-         <Phase-1 name="Foundation" status="pending">
-            <goal>What this phase proves or unlocks</goal>
-            <step-1 module="M-CONFIG" status="pending" verification="V-M-CONFIG">Initialize configuration module</step-1>
-            <step-2 module="M-DB" status="pending" verification="V-M-DB">Set up database layer</step-2>
+          <Phase-1 name="Foundation" status="pending">
+             <goal>What this phase proves or unlocks</goal>
+             <step-1 module="M-CONFIG" status="pending" verification="V-M-CONFIG">Initialize configuration module</step-1>
+             <step-2 module="M-DB" status="pending" verification="V-M-DB">Set up database layer</step-2>
           </Phase-1>
 
           Phase status: "pending" | "in-progress" | "done"
@@ -76,8 +76,11 @@
     <!-- Controller-owned shared artifacts and execution constraints.
 
          <default-profile>balanced</default-profile>
-         <controller-owns>docs/development-plan.xml, docs/knowledge-graph.xml, docs/verification-plan.xml</controller-owns>
-         <worker-owns>Only module source files and module-local tests inside the approved write scope.</worker-owns>
-    -->
+          <controller-owns>docs/development-plan.xml, docs/knowledge-graph.xml, docs/verification-plan.xml</controller-owns>
+          <worker-owns>Only module source files and module-local tests inside the approved write scope.</worker-owns>
+          <max-fix-attempts-per-step>2</max-fix-attempts-per-step>
+          <replan-trigger>Missing dependency, contradictory contract, or unclear external surface.</replan-trigger>
+          <checkpoint-requirement>Every step must leave assumptions, commands run, evidence, and next action.</checkpoint-requirement>
+     -->
   </ExecutionPolicy>
 </DevelopmentPlan>

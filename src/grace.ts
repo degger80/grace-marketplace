@@ -5,17 +5,19 @@ import { defineCommand, type CommandDef, runMain } from "citty";
 import { fileCommand } from "./grace-file";
 import { lintCommand } from "./grace-lint";
 import { moduleCommand } from "./grace-module";
+import { statusCommand } from "./grace-status";
 
 const main = defineCommand({
   meta: {
     name: "grace",
-    version: "3.7.0",
-    description: "GRACE CLI for linting semantic markup and querying GRACE project artifacts.",
+    version: "3.8.0",
+    description: "GRACE CLI for linting, status snapshots, semantic markup, and querying GRACE project artifacts.",
   },
   subCommands: {
     file: fileCommand,
     lint: lintCommand,
     module: moduleCommand,
+    status: statusCommand,
   },
 });
 

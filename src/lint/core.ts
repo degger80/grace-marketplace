@@ -1,13 +1,23 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { loadGraceLintConfig } from "./config";
 import { getLanguageAdapter } from "./adapters/base";
+import { loadGraceArtifactIndex } from "../query/core";
+import {
+  collectCodeFiles,
+  findSection,
+  hasGraceMarkers,
+  lineNumberAt,
+  normalizeRelative,
+  readTextIfExists,
+  stripCommentPrefix,
+} from "../project-utils";
 import type {
-  GraceLintConfig,
   LanguageAnalysis,
   LintIssue,
   LintOptions,
+  LintProfile,
   LintResult,
   MapMode,
   MarkupSection,
@@ -20,44 +30,6 @@ const REQUIRED_DOCS = ["docs/knowledge-graph.xml", "docs/development-plan.xml", 
 
 const OPTIONAL_PACKET_DOC = "docs/operational-packets.xml";
 const LINT_CONFIG_FILE = ".grace-lint.json";
-const DEFAULT_IGNORED_DIRS = new Set([
-  ".git",
-  "node_modules",
-  "dist",
-  "build",
-  "coverage",
-  ".next",
-  ".turbo",
-  ".cache",
-]);
-
-const CODE_EXTENSIONS = new Set([
-  ".js",
-  ".jsx",
-  ".ts",
-  ".tsx",
-  ".mjs",
-  ".cjs",
-  ".mts",
-  ".cts",
-  ".py",
-  ".pyi",
-  ".go",
-  ".java",
-  ".kt",
-  ".rs",
-  ".rb",
-  ".php",
-  ".swift",
-  ".scala",
-  ".sql",
-  ".sh",
-  ".bash",
-  ".zsh",
-  ".clj",
-  ".cljs",
-  ".cljc",
-]);
 
 const UNIQUE_TAG_ANTI_PATTERNS = [
   {
@@ -106,113 +78,25 @@ const VALID_ROLES = new Set<ModuleRole>(["RUNTIME", "TEST", "BARREL", "CONFIG", 
 const VALID_MAP_MODES = new Set<MapMode>(["EXPORTS", "LOCALS", "SUMMARY", "NONE"]);
 const TEXT_FORMAT_OPTIONS = new Set(["text", "json"]);
 
-function normalizeRelative(root: string, filePath: string) {
-  return path.relative(root, filePath) || ".";
-}
-
-function lineNumberAt(text: string, index: number) {
-  return text.slice(0, index).split("\n").length;
-}
-
-function readTextIfExists(filePath: string) {
-  return existsSync(filePath) ? readFileSync(filePath, "utf8") : null;
+function addAutonomyIssue(
+  result: LintResult,
+  severity: LintIssue["severity"],
+  code: string,
+  file: string,
+  message: string,
+  line?: number,
+) {
+  addIssue(result, {
+    severity,
+    code,
+    file,
+    line,
+    message,
+  });
 }
 
 function addIssue(result: LintResult, issue: LintIssue) {
   result.issues.push(issue);
-}
-
-function stripQuotedStrings(text: string) {
-  let result = "";
-  let quote: '"' | "'" | "`" | null = null;
-  let escaped = false;
-
-  for (const char of text) {
-    if (!quote) {
-      if (char === '"' || char === "'" || char === "`") {
-        quote = char;
-        result += " ";
-        continue;
-      }
-
-      result += char;
-      continue;
-    }
-
-    if (escaped) {
-      escaped = false;
-      result += char === "\n" ? "\n" : " ";
-      continue;
-    }
-
-    if (char === "\\") {
-      escaped = true;
-      result += " ";
-      continue;
-    }
-
-    if (char === quote) {
-      quote = null;
-      result += " ";
-      continue;
-    }
-
-    result += char === "\n" ? "\n" : " ";
-  }
-
-  return result;
-}
-
-function hasGraceMarkers(text: string) {
-  const searchable = stripQuotedStrings(text);
-  return searchable.split("\n").some((line) => /^(\s*)(\/\/|#|--|;+|\*)\s*(START_MODULE_CONTRACT|START_MODULE_MAP|START_CONTRACT:|START_BLOCK_|START_CHANGE_SUMMARY)/.test(line));
-}
-
-function collectCodeFiles(root: string, config: GraceLintConfig | null, currentDir = root): string[] {
-  const files: string[] = [];
-  const ignoredDirs = new Set([...DEFAULT_IGNORED_DIRS, ...(config?.ignoredDirs ?? [])]);
-  const entries = readdirSync(currentDir, { withFileTypes: true });
-
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      if (ignoredDirs.has(entry.name)) {
-        continue;
-      }
-
-      files.push(...collectCodeFiles(root, config, path.join(currentDir, entry.name)));
-      continue;
-    }
-
-    if (!entry.isFile()) {
-      continue;
-    }
-
-    const filePath = path.join(currentDir, entry.name);
-    if (CODE_EXTENSIONS.has(path.extname(filePath))) {
-      files.push(filePath);
-    }
-  }
-
-  return files;
-}
-
-function stripCommentPrefix(line: string) {
-  return line.replace(/^\s*(\/\/|#|--|;+|\*)?\s*/, "");
-}
-
-function findSection(text: string, startMarker: string, endMarker: string) {
-  const startIndex = text.indexOf(startMarker);
-  const endIndex = text.indexOf(endMarker);
-
-  if (startIndex === -1 || endIndex === -1 || startIndex > endIndex) {
-    return null;
-  }
-
-  return {
-    content: text.slice(startIndex + startMarker.length, endIndex),
-    startLine: lineNumberAt(text, startIndex),
-    endLine: lineNumberAt(text, endIndex),
-  } satisfies MarkupSection;
 }
 
 function ensureSectionPair(
@@ -557,6 +441,167 @@ function lintRequiredPacketSections(result: LintResult, relativePath: string, te
   }
 }
 
+function lintAutonomousReadiness(
+  result: LintResult,
+  root: string,
+  docs: Record<string, string | null>,
+  operationalPackets: string | null,
+  ignoredDirs: string[],
+) {
+  const isLikelyTestPath = (relativePath: string) => /(^|\/)(__tests__|tests)(\/|$)|(^|\/)(test_[^/]+|[^/]+\.(test|spec)\.[^.]+)$/.test(relativePath);
+  const lineHasRuntimeMarker = (text: string, marker: string) =>
+    text
+      .split("\n")
+      .some((line) => line.includes(marker) && !/^\s*(\/\/|#|--|;+|\*)/.test(line));
+
+  if (!operationalPackets) {
+    addAutonomyIssue(
+      result,
+      "error",
+      "autonomy.missing-operational-packets",
+      OPTIONAL_PACKET_DOC,
+      "Autonomous execution requires docs/operational-packets.xml so controller, worker, and failure handoffs have a shared packet shape.",
+    );
+  }
+
+  if (!docs["docs/knowledge-graph.xml"] || !docs["docs/development-plan.xml"] || !docs["docs/verification-plan.xml"]) {
+    return;
+  }
+
+  let index;
+  try {
+    index = loadGraceArtifactIndex(root);
+  } catch (error) {
+    addAutonomyIssue(
+      result,
+      "error",
+      "autonomy.failed-to-index-project",
+      root,
+      `Autonomous readiness checks could not index the GRACE project: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return;
+  }
+
+  const sharedModules = index.modules.filter((moduleRecord) => moduleRecord.plan || moduleRecord.graph);
+  const implementationFiles = collectCodeFiles(root, ignoredDirs)
+    .map((filePath) => ({
+      path: normalizeRelative(root, filePath),
+      text: readFileSync(filePath, "utf8"),
+    }))
+    .filter((file) => !isLikelyTestPath(file.path));
+
+  for (const moduleRecord of sharedModules) {
+    if (moduleRecord.verifications.length === 0) {
+      addAutonomyIssue(
+        result,
+        "error",
+        "autonomy.module-missing-verification",
+        "docs/verification-plan.xml",
+        `Module \`${moduleRecord.id}\` has shared planning or graph context but no matching verification entry. Autonomous runs require a V-M entry per shared module.`,
+      );
+    }
+
+    for (const step of moduleRecord.steps) {
+      if (!step.verificationId) {
+        addAutonomyIssue(
+          result,
+          "error",
+          "autonomy.step-missing-verification",
+          "docs/development-plan.xml",
+          `${step.phaseTag} / ${step.stepTag} for module \`${moduleRecord.id}\` is missing an explicit verification reference. Autonomous packets should name the verification gate they rely on.`,
+        );
+      }
+    }
+  }
+
+  for (const entry of index.verifications) {
+    if (entry.testFiles.length === 0) {
+      addAutonomyIssue(
+        result,
+        "error",
+        "autonomy.verification-missing-test-files",
+        "docs/verification-plan.xml",
+        `Verification entry \`${entry.id}\` must list at least one test file for autonomous execution.`,
+      );
+    }
+
+    if (entry.moduleChecks.length === 0) {
+      addAutonomyIssue(
+        result,
+        "error",
+        "autonomy.verification-missing-module-checks",
+        "docs/verification-plan.xml",
+        `Verification entry \`${entry.id}\` must define at least one module-local command for autonomous execution.`,
+      );
+    }
+
+    if (entry.scenarios.length === 0) {
+      addAutonomyIssue(
+        result,
+        "error",
+        "autonomy.verification-missing-scenarios",
+        "docs/verification-plan.xml",
+        `Verification entry \`${entry.id}\` must define success or failure scenarios before it can gate autonomous execution.`,
+      );
+    }
+
+    if (entry.requiredLogMarkers.length === 0 && entry.requiredTraceAssertions.length === 0) {
+      addAutonomyIssue(
+        result,
+        "error",
+        "autonomy.verification-missing-observable-evidence",
+        "docs/verification-plan.xml",
+        `Verification entry \`${entry.id}\` must define required log markers or trace assertions so failures are observable without hidden model reasoning.`,
+      );
+    }
+
+    for (const testFile of entry.testFiles) {
+      const absolutePath = path.isAbsolute(testFile) ? testFile : path.join(root, testFile);
+      if (!existsSync(absolutePath)) {
+        addAutonomyIssue(
+          result,
+          "error",
+          "autonomy.verification-test-file-missing-on-disk",
+          "docs/verification-plan.xml",
+          `Verification entry \`${entry.id}\` references test file \`${testFile}\`, but that file does not exist on disk.`,
+        );
+      }
+    }
+
+    for (const marker of entry.requiredLogMarkers) {
+      if (!implementationFiles.some((file) => lineHasRuntimeMarker(file.text, marker))) {
+        addAutonomyIssue(
+          result,
+          "error",
+          "autonomy.required-log-marker-not-found",
+          "docs/verification-plan.xml",
+          `Verification entry \`${entry.id}\` requires log marker \`${marker}\`, but that marker was not found in the current codebase.`,
+        );
+      }
+    }
+
+    if (!entry.waveFollowUp) {
+      addAutonomyIssue(
+        result,
+        "warning",
+        "autonomy.verification-missing-wave-follow-up",
+        "docs/verification-plan.xml",
+        `Verification entry \`${entry.id}\` does not define a wave-level follow-up check. Long autonomous runs are safer when merged surfaces have an explicit post-merge gate.`,
+      );
+    }
+
+    if (!entry.phaseFollowUp) {
+      addAutonomyIssue(
+        result,
+        "warning",
+        "autonomy.verification-missing-phase-follow-up",
+        "docs/verification-plan.xml",
+        `Verification entry \`${entry.id}\` does not define a phase-level follow-up check. Autonomous execution benefits from an explicit broader gate before phase completion.`,
+      );
+    }
+  }
+}
+
 function lintExportMapParity(
   result: LintResult,
   relativePath: string,
@@ -754,6 +799,7 @@ function lintGovernedFile(result: LintResult, root: string, filePath: string, te
 export function lintGraceProject(projectRoot: string, options: LintOptions = {}): LintResult {
   const root = path.resolve(projectRoot);
   const { config, issues: configIssues } = loadGraceLintConfig(root);
+  const profile: LintProfile = options.profile ?? "standard";
 
   const docs = {
     "docs/knowledge-graph.xml": readTextIfExists(path.join(root, "docs/knowledge-graph.xml")),
@@ -763,6 +809,7 @@ export function lintGraceProject(projectRoot: string, options: LintOptions = {})
 
   const result: LintResult = {
     root,
+    profile,
     filesChecked: 0,
     governedFiles: 0,
     xmlFilesChecked: 0,
@@ -799,6 +846,10 @@ export function lintGraceProject(projectRoot: string, options: LintOptions = {})
   if (operationalPackets) {
     result.xmlFilesChecked += 1;
     lintRequiredPacketSections(result, OPTIONAL_PACKET_DOC, operationalPackets);
+  }
+
+  if (profile === "autonomous") {
+    lintAutonomousReadiness(result, root, docs, operationalPackets, config?.ignoredDirs ?? []);
   }
 
   const knowledgeGraph = docs["docs/knowledge-graph.xml"];
@@ -883,7 +934,7 @@ export function lintGraceProject(projectRoot: string, options: LintOptions = {})
     }
   }
 
-  for (const filePath of collectCodeFiles(root, config)) {
+  for (const filePath of collectCodeFiles(root, config?.ignoredDirs ?? [])) {
     result.filesChecked += 1;
     const text = readFileSync(filePath, "utf8");
     if (!hasGraceMarkers(text)) {
@@ -903,6 +954,7 @@ export function formatTextReport(result: LintResult) {
     "GRACE Lint Report",
     "=================",
     `Root: ${result.root}`,
+    `Profile: ${result.profile}`,
     `Code files checked: ${result.filesChecked}`,
     `Governed files checked: ${result.governedFiles}`,
     `XML files checked: ${result.xmlFilesChecked}`,

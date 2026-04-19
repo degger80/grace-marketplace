@@ -22,6 +22,9 @@ Keep execution **sequential**, but keep context handling and verification discip
 - Each step gets a compact execution packet so generation and review stay focused
 - Reviews should default to the smallest safe scope
 - Verification should be split across step, phase, and final-run levels instead of repeating whole-repo work after every clean step
+- Packets must be strong enough that the worker does not need mid-run task reinterpretation
+- Every step should leave behind a visible checkpoint report so failures can be reviewed without hidden reasoning
+- Use a small retry budget per step; when the packet or contract is wrong, stop and replan instead of drifting
 
 ## Process
 
@@ -35,13 +38,17 @@ When the optional `grace` CLI is available, `grace module show M-XXX --path <pro
 3. Build a controller-owned execution packet for each step containing:
    - module ID and purpose
    - target file paths and exact write scope
+   - preferred stack or tooling excerpt from `docs/technology.xml` when the project defines one
    - module contract excerpt from `docs/development-plan.xml`
    - module graph entry excerpt from `docs/knowledge-graph.xml`
    - dependency contract summaries for every module in `DEPENDS`
    - verification excerpt from `docs/verification-plan.xml`, including module-local commands, critical scenarios, required log markers, and test-file targets
-    - expected graph delta fields: imports, public exports, public annotations, and CrossLinks
-    - expected verification delta fields: test files, commands, required markers, and gate follow-up notes
-   Use the canonical `ExecutionPacket`, `GraphDelta`, and `VerificationDelta` shapes from `docs/operational-packets.xml` when that file exists.
+   - assumptions or unresolved edges that are still acceptable inside the step scope
+   - stop conditions or replan triggers that should halt the step immediately
+   - retry budget for fix or review loops
+   - expected graph delta fields: imports, public exports, public annotations, and CrossLinks
+   - expected verification delta fields: test files, commands, required markers, and gate follow-up notes
+    Use the canonical `ExecutionPacket`, `GraphDelta`, and `VerificationDelta` shapes from `docs/operational-packets.xml` when that file exists.
 4. Present the execution queue to the user as a numbered list:
    ```text
    Execution Queue:
@@ -65,6 +72,7 @@ Follow this protocol for the assigned module:
 - run module-local verification commands from the packet only
 - produce graph sync output or a graph delta proposal for the controller to apply, limited to public module interface changes
 - produce a verification delta proposal for test files, commands, markers, and phase follow-up notes
+- produce a short checkpoint note: assumptions kept, commands run, evidence captured, and whether the step consumed any retry budget
 - **commit the implementation immediately after verification passes** with format:
    ```
    grace(MODULE_ID): short description of what was generated
@@ -89,9 +97,17 @@ If critical issues are found:
 2. rerun only the affected scoped checks
 3. escalate to a fuller `$grace-reviewer` audit only if local evidence suggests wider drift
 
+#### 2c. Reflect, Replan, or Stop
+If implementation or review fails, do not loop indefinitely.
+
+- use the step packet retry budget; default to at most 2 fix loops when no budget is specified
+- after each failed loop, update the checkpoint note with the first divergent test, marker, function, or block
+- if the failure points to a wrong contract, missing dependency, unclear third-party surface, or weak verification plan, stop and ask the user to replan instead of improvising architecture mid-run
+- if the user gives new requirements during a running step, apply them at the next checkpoint rather than mutating the in-flight goal silently
+
 If only minor issues are found, note them and proceed.
 
-#### 2c. Apply Shared-Artifact Updates Centrally
+#### 2d. Apply Shared-Artifact Updates Centrally
 After the implementation commit from Step 2a:
 1. update `docs/knowledge-graph.xml` from the accepted graph sync output or graph delta proposal
 2. update `docs/verification-plan.xml` from the accepted verification delta proposal
@@ -101,7 +117,7 @@ After the implementation commit from Step 2a:
    grace(meta): sync after MODULE_ID
    ```
 
-#### 2d. Progress Report
+#### 2e. Progress Report
 After each step, print:
 ```text
 --- Step order/total complete ---
@@ -109,6 +125,7 @@ Module: MODULE_ID (path)
 Status: DONE
 Review: scoped pass / scoped pass with N minor notes / escalated audit pass
 Verification: step-level passed / follow-up required at phase level
+Checkpoint: assumptions confirmed / retry budget used N / stop trigger none
 Implementation commit: hash
 Meta commit: hash (if any)
 Remaining: count steps
@@ -120,11 +137,12 @@ After all steps in a phase are done:
 2. run the phase-level verification commands or gates referenced in `docs/verification-plan.xml`
 3. run `$grace-refresh` to verify graph and verification-reference integrity; prefer targeted refresh if the touched scope is well bounded, escalate to full refresh if drift is suspected
 4. run a broader `$grace-reviewer` audit if the phase introduced non-trivial shared-artifact changes or drift risk
-5. commit the phase update if it was not already included in the final step commit:
+5. run `grace lint --profile autonomous --path <project-root>` when the phase materially changed verification, packets, or execution policy
+6. commit the phase update if it was not already included in the final step commit:
     ```text
     grace(plan): mark Phase N "phase name" as done
     ```
-6. print a phase summary
+7. print a phase summary
 
 ### Step 4: Final Summary
 After all phases are executed:

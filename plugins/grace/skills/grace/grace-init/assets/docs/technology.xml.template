@@ -25,8 +25,18 @@
          <tool name="linter" value="eslint" version="9.x" />
          <tool name="formatter" value="prettier" version="3.x" />
          <tool name="test-runner" value="$TEST_RUNNER" version="$TEST_RUNNER_VERSION" />
-    -->
+     -->
   </Tooling>
+
+  <PreferredAgentStack>
+    <!-- Define the stack agents should prefer unless the contract says otherwise.
+
+         <preferred-runtime-library>drizzle-orm</preferred-runtime-library>
+         <preferred-test-library>vitest</preferred-test-library>
+         <preferred-observability-library>pino</preferred-observability-library>
+         <discouraged-surface reason="Only one adapter is maintained.">custom in-house RPC wrapper</discouraged-surface>
+    -->
+  </PreferredAgentStack>
 
   <Testing>
     <!-- Make test strategy explicit early. This drives execution packets later.
@@ -54,8 +64,18 @@
          <log-format>[Module][function][BLOCK_NAME] message</log-format>
          <required-fields>correlationId, actorId, requestId</required-fields>
          <redaction>Never log secrets, credentials, or raw high-risk payloads.</redaction>
-    -->
+     -->
   </Observability>
+
+  <AutonomyPolicy>
+    <!-- Make long autonomous execution constraints explicit early.
+
+         <default-execution-profile>balanced</default-execution-profile>
+         <max-fix-attempts-per-step>2</max-fix-attempts-per-step>
+         <replan-trigger>Missing dependency, contradictory contract, or unclear third-party surface.</replan-trigger>
+         <checkpoint-requirement>Every completed step must emit assumptions, commands, evidence, and next action.</checkpoint-requirement>
+    -->
+  </AutonomyPolicy>
 
   <DeliveryShape>
     <!-- Optional deployment or runtime shape notes.

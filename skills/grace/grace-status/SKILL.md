@@ -3,7 +3,9 @@ name: grace-status
 description: "Show the current health status of a GRACE project. Use to get an overview of project artifacts, codebase metrics, knowledge graph health, verification coverage, and suggested next actions."
 ---
 
-Show the current state of the GRACE project.
+Show the current state of the GRACE project, including whether it is safe to hand to a longer autonomous run.
+
+When the optional CLI is available, prefer `grace status --path <project-root>` for the initial report, then deepen with `grace lint`, `grace module show`, and `grace file show` only where needed.
 
 ## Report Contents
 
@@ -35,8 +37,12 @@ Quick check:
 - Any orphaned or missing entries
 - Modules in verification plan vs modules in development plan
 - Missing or stale verification refs
+- Pending phases and steps that still need execution
+- Autonomy blockers from `grace lint --profile autonomous`
 
 If the optional `grace` CLI is available, you may also run `grace lint --path <project-root>` as a fast integrity snapshot and include any relevant findings in the report.
+
+If the report is specifically about autonomous execution readiness, also run `grace lint --profile autonomous --path <project-root>` and summarize blockers versus warnings.
 
 When the report needs focused navigation instead of raw artifact dumps, you may also use:
 - `grace module find <query> --path <project-root>` to resolve the relevant module from names, IDs, dependencies, or changed paths
@@ -56,4 +62,5 @@ Based on the status, suggest what to do next:
 - If fast integrity signals are needed before deeper review — "Run `grace lint --path <project-root>`"
 - If the next step is targeted investigation of one module or file — "Run `grace module show M-XXX --path <project-root> --with verification` or `grace file show <path> --path <project-root> --contracts --blocks`"
 - If tests or logs are too weak for autonomous work — "Run `$grace-verification`"
+- If autonomy blockers are present — "Run `grace lint --profile autonomous --path <project-root>` and strengthen verification or packet quality before execution"
 - If everything synced — "Project is healthy"

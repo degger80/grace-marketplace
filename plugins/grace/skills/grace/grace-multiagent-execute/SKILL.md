@@ -22,6 +22,8 @@ Parallelize **module implementation**, not **architectural truth**.
 - Worker agents own only their assigned module files and module-local tests
 - Reviewers validate module outputs before the controller merges graph and plan updates
 - Speed should come from better context packaging, batched shared-artifact work, and scoped reviews - not from letting workers invent architecture
+- Packets should be good enough that workers do not need mid-wave goal reinterpretation
+- Controller checkpoints matter more than chatty mid-flight intervention; revise packets between waves, not by hoping the worker will self-correct from vague new prompts
 
 If multiple agents edit the same module, the same shared XML file, or the same tightly coupled slice, this is not a multi-agent wave. Use `$grace-execute` instead.
 
@@ -64,12 +66,16 @@ Read `docs/development-plan.xml`, `docs/knowledge-graph.xml`, and `docs/verifica
    - it does not require shared edits to the same integration surface
 4. Choose the execution profile: `safe`, `balanced`, or `fast`
 5. For each wave, prepare a compact **execution packet** for every module containing:
-    - module ID and purpose
-    - target file paths and exact write scope
-    - module contract excerpt from `docs/development-plan.xml`
-    - module graph entry excerpt from `docs/knowledge-graph.xml`
-    - dependency contract summaries for every module in `DEPENDS`
-    - verification excerpt from `docs/verification-plan.xml`, including module-local commands, required scenarios, required log markers, and target test files
+     - module ID and purpose
+     - target file paths and exact write scope
+     - preferred stack or tooling excerpt from `docs/technology.xml` when the project defines one
+     - module contract excerpt from `docs/development-plan.xml`
+     - module graph entry excerpt from `docs/knowledge-graph.xml`
+     - dependency contract summaries for every module in `DEPENDS`
+     - verification excerpt from `docs/verification-plan.xml`, including module-local commands, required scenarios, required log markers, and target test files
+     - assumptions or unresolved edges that remain acceptable inside the write scope
+     - stop conditions or replan triggers that should halt the worker immediately
+     - retry budget for fix or review loops
      - wave-level integration checks that will run after merge
      - expected graph delta fields: imports, public exports, public annotations, and CrossLinks
      - expected verification delta fields: test files, commands, markers, and phase follow-up notes
@@ -104,9 +110,10 @@ For each approved wave:
    - generate or update code using the module contract and verification excerpt from the packet
    - preserve MODULE_CONTRACT, MODULE_MAP, CHANGE_SUMMARY, function contracts, and semantic blocks
    - add or update module-local tests only
-   - preserve or add required stable log markers for critical branches
-   - run module-local verification only
-    - **commit their work after module-local verification passes** with format:
+     - preserve or add required stable log markers for critical branches
+     - run module-local verification only
+     - return a short checkpoint report: assumptions kept, commands run, evidence captured, and whether any retry budget was consumed
+     - **commit their work after module-local verification passes** with format:
        ```
        grace(MODULE_ID): <imperative verb phrase describing what was done>
        
@@ -133,8 +140,9 @@ After each worker finishes:
     - verification is too weak for the chosen profile
     - a phase boundary audit is due
 4. If issues are found:
-   - send the same worker back to fix them
-   - re-run only the affected reviews unless escalation is required
+    - send the same worker back to fix them
+    - keep the fix loop bounded; default to at most 2 review cycles per worker when the packet does not define a budget
+    - re-run only the affected reviews unless escalation is required
 5. Only approved module outputs may move to controller integration
 
 ### Step 5: Controller Integration and Batch Graph Sync
@@ -147,6 +155,7 @@ After all modules in the wave are approved:
 5. Run targeted `$grace-refresh` against the changed modules and touched dependency surfaces
 6. If targeted refresh reports wider drift, escalate to a full refresh before the next wave
 7. If the wave reveals weak or missing automated checks, stop the run and tell the user to run `$grace-verification` themselves before continuing
+8. If the wave changed packet shape, execution policy, or verification depth materially, run `grace lint --profile autonomous --path <project-root>` before dispatching the next wave
 
 ### Step 6: Verify by Level
 Run verification at the smallest level that still protects correctness.

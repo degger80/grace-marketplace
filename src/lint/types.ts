@@ -1,5 +1,7 @@
 export type LintSeverity = "error" | "warning";
 
+export type LintProfile = "standard" | "autonomous";
+
 export type ModuleRole = "RUNTIME" | "TEST" | "BARREL" | "CONFIG" | "TYPES" | "SCRIPT";
 export type MapMode = "EXPORTS" | "LOCALS" | "SUMMARY" | "NONE";
 
@@ -13,6 +15,7 @@ export type LintIssue = {
 
 export type LintResult = {
   root: string;
+  profile: LintProfile;
   filesChecked: number;
   governedFiles: number;
   xmlFilesChecked: number;
@@ -21,6 +24,7 @@ export type LintResult = {
 
 export type LintOptions = {
   allowMissingDocs?: boolean;
+  profile?: LintProfile;
 };
 
 export type GraceLintConfig = {

@@ -1,6 +1,6 @@
 ---
 name: grace-cli
-description: "Operate the optional `grace` CLI against a GRACE project. Use when you want to lint GRACE artifacts, resolve modules from names or file paths, inspect shared/public module context, or inspect file-local/private markup through `grace lint`, `grace module find`, `grace module show`, and `grace file show`."
+description: "Operate the optional `grace` CLI against a GRACE project. Use when you want to lint GRACE artifacts, check autonomy readiness, inspect project health, resolve modules from names or file paths, inspect shared/public module context, or inspect file-local/private markup through `grace lint`, `grace status`, `grace module find`, `grace module show`, and `grace file show`."
 ---
 
 Use the optional `grace` CLI as a fast GRACE-aware read/query layer.
@@ -17,6 +17,10 @@ If the CLI is missing, or the repository is not a GRACE project, say so and fall
 
 - `grace lint --path <project-root>`
   Use for a fast integrity snapshot across semantic markup, XML artifacts, and export/map drift.
+- `grace lint --profile autonomous --path <project-root>`
+  Use before long agent runs to verify that operational packets, verification entries, and observable evidence are strong enough for autonomous execution.
+- `grace status --path <project-root>`
+  Use for a one-shot health report: artifact presence, codebase metrics, integrity snapshot, autonomy gate, recent changes, and the next safe action.
 - `grace module find <query> --path <project-root>`
   Use to resolve module IDs from names, paths, dependencies, annotations, verification refs, or file-local `LINKS`.
 - `grace module show <id-or-path> --path <project-root>`
@@ -30,11 +34,13 @@ If the CLI is missing, or the repository is not a GRACE project, say so and fall
 
 ## Recommended Workflow
 
-1. Run `grace lint` when integrity or drift matters.
-2. Run `grace module find` to resolve the target module from the user's words, a stack trace, or a changed path.
-3. Run `grace module show` for the shared/public truth.
-4. Run `grace file show` for the file-local/private truth.
-5. Read the underlying XML or source files only for the narrowed scope that still needs deeper evidence.
+1. Run `grace status` when you first need to understand the current project state.
+2. Run `grace lint` when integrity or drift matters.
+3. Run `grace lint --profile autonomous` before long autonomous execution.
+4. Run `grace module find` to resolve the target module from the user's words, a stack trace, or a changed path.
+5. Run `grace module show` for the shared/public truth.
+6. Run `grace file show` for the file-local/private truth.
+7. Read the underlying XML or source files only for the narrowed scope that still needs deeper evidence.
 
 ## Output Guidance
 

@@ -21,6 +21,8 @@ Every file starts with:
 
 The contract is written before the code. It comes from the development plan (`docs/development-plan.xml`), which was approved by the user during the `$grace-plan` phase.
 
+Name things semantically. A contract is much stronger when its module names, PURPOSE text, and block labels already encode the intended transformation instead of forcing the agent to infer it from abstract placeholders.
+
 Important distinction:
 - shared XML artifacts carry the module's public contract and public interface
 - private helpers, internal normalization steps, and implementation-only types stay in the source file header and local contracts
@@ -72,6 +74,7 @@ You have freedom in HOW to implement, but not in WHAT. The contract and the know
 5. **Track changes** — after fixing bugs, add a CHANGE_SUMMARY entry
 6. **Never remove markup** — semantic markup anchors are load-bearing structure
 7. **Propose, don't deviate** — if the contract is wrong, propose a change to the user. Don't silently implement something different.
+8. **Anchor the intent** — prefer meaningful names and concrete PURPOSE text over generic placeholders or arbitrary IDs.
 
 ## Contract in development-plan.xml
 

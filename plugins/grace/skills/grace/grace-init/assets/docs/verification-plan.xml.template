@@ -7,8 +7,9 @@
          <module-level-focus>Fast deterministic checks close to the module.</module-level-focus>
          <wave-level-focus>Checks only merged surfaces touched by the current wave.</wave-level-focus>
          <phase-level-focus>Broader integration and regression confidence.</phase-level-focus>
+         <autonomy-gate>Each shared module needs commands, scenarios, observable evidence, and wave/phase follow-up before long autonomous execution.</autonomy-gate>
          <redaction>Never log secrets, credentials, raw tokens, or high-risk payloads.</redaction>
-    -->
+     -->
   </GlobalPolicy>
 
   <CriticalFlows>

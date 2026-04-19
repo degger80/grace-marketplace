@@ -91,6 +91,11 @@ function writeCurrentDocs(root: string) {
     root,
     "docs/verification-plan.xml",
     `<VerificationPlan VERSION="0.1.0">
+  <GlobalPolicy>
+    <module-level-focus>Fast deterministic checks close to the module.</module-level-focus>
+    <wave-level-focus>Checks only merged surfaces touched by a wave.</wave-level-focus>
+    <phase-level-focus>Broader regression confidence.</phase-level-focus>
+  </GlobalPolicy>
   <ModuleVerification>
     <V-M-EXAMPLE MODULE="M-EXAMPLE">
       <test-files>
@@ -99,6 +104,18 @@ function writeCurrentDocs(root: string) {
       <module-checks>
         <command-1>bun test src/example.test.ts</command-1>
       </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Primary success path returns ok.</scenario-1>
+        <scenario-2 kind="failure">Invalid state is rejected before side effects.</scenario-2>
+      </scenarios>
+      <required-log-markers>
+        <marker-1>[ExampleDomain][run][BLOCK_EXECUTE_FLOW]</marker-1>
+      </required-log-markers>
+      <required-trace-assertions>
+        <assertion-1>Failure path must not emit the success marker.</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>Run the merged example integration path.</wave-follow-up>
+      <phase-follow-up>Run the full regression suite before phase completion.</phase-follow-up>
     </V-M-EXAMPLE>
   </ModuleVerification>
 </VerificationPlan>`,
@@ -669,5 +686,154 @@ export function run() {
 
     const result = lintGraceProject(root);
     expect(result.issues).toHaveLength(0);
+  });
+
+  it("supports the autonomous readiness profile when packets and evidence are complete", () => {
+    const root = createProject();
+    writeCurrentDocs(root);
+
+    writeProjectFile(
+      root,
+      "src/example.ts",
+      `// START_MODULE_CONTRACT
+//   PURPOSE: Run the example flow.
+//   SCOPE: Execute the happy path.
+//   DEPENDS: none
+//   LINKS: M-EXAMPLE
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   run - Execute the example flow.
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.1.0 - Added example module]
+// END_CHANGE_SUMMARY
+export function run() {
+  console.info("[ExampleDomain][run][BLOCK_EXECUTE_FLOW] ok");
+  // START_BLOCK_EXECUTE_FLOW
+  return "ok";
+  // END_BLOCK_EXECUTE_FLOW
+}
+`,
+    );
+
+    writeProjectFile(
+      root,
+      "src/example.test.ts",
+      `import { expect, test } from "bun:test";
+import { run } from "./example";
+
+test("run", () => {
+  expect(run()).toBe("ok");
+});
+`,
+    );
+
+    const result = lintGraceProject(root, { profile: "autonomous" });
+    expect(result.issues).toHaveLength(0);
+  });
+
+  it("reports autonomous readiness gaps when verification metadata is too thin", () => {
+    const root = createProject();
+
+    writeProjectFile(
+      root,
+      "docs/knowledge-graph.xml",
+      `<KnowledgeGraph>
+  <Project NAME="Example" VERSION="0.1.0">
+    <M-EXAMPLE NAME="Example" TYPE="CORE_LOGIC">
+      <purpose>Run the example flow.</purpose>
+      <path>src/example.ts</path>
+    </M-EXAMPLE>
+  </Project>
+</KnowledgeGraph>`,
+    );
+
+    writeProjectFile(
+      root,
+      "docs/development-plan.xml",
+      `<DevelopmentPlan VERSION="0.1.0">
+  <Modules>
+    <M-EXAMPLE NAME="Example" TYPE="CORE_LOGIC">
+      <contract>
+        <purpose>Run the example flow.</purpose>
+      </contract>
+    </M-EXAMPLE>
+  </Modules>
+  <ImplementationOrder>
+    <Phase-1 name="Foundation" status="pending">
+      <step-1 module="M-EXAMPLE" status="pending">Implement example.</step-1>
+    </Phase-1>
+  </ImplementationOrder>
+</DevelopmentPlan>`,
+    );
+
+    writeProjectFile(
+      root,
+      "docs/verification-plan.xml",
+      `<VerificationPlan VERSION="0.1.0">
+  <ModuleVerification>
+    <V-M-EXAMPLE MODULE="M-EXAMPLE">
+      <test-files>
+        <file-1>src/example.test.ts</file-1>
+      </test-files>
+    </V-M-EXAMPLE>
+  </ModuleVerification>
+</VerificationPlan>`,
+    );
+
+    const result = lintGraceProject(root, { profile: "autonomous" });
+    const codes = result.issues.map((issue) => issue.code);
+    expect(codes).toContain("autonomy.missing-operational-packets");
+    expect(codes).toContain("autonomy.step-missing-verification");
+    expect(codes).toContain("autonomy.verification-test-file-missing-on-disk");
+    expect(codes).toContain("autonomy.verification-missing-module-checks");
+    expect(codes).toContain("autonomy.verification-missing-scenarios");
+    expect(codes).toContain("autonomy.verification-missing-observable-evidence");
+  });
+
+  it("does not accept required log markers that only appear in tests", () => {
+    const root = createProject();
+    writeCurrentDocs(root);
+
+    writeProjectFile(
+      root,
+      "src/example.ts",
+      `// START_MODULE_CONTRACT
+//   PURPOSE: Run the example flow.
+//   SCOPE: Execute the happy path.
+//   DEPENDS: none
+//   LINKS: M-EXAMPLE
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   run - Execute the example flow.
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.1.0 - Added example module]
+// END_CHANGE_SUMMARY
+export function run() {
+  // START_BLOCK_EXECUTE_FLOW
+  return "ok";
+  // END_BLOCK_EXECUTE_FLOW
+}
+`,
+    );
+
+    writeProjectFile(
+      root,
+      "src/example.test.ts",
+      `import { expect, test } from "bun:test";
+
+test("marker expectation only", () => {
+  expect("[ExampleDomain][run][BLOCK_EXECUTE_FLOW]").toContain("BLOCK_EXECUTE_FLOW");
+});
+`,
+    );
+
+    const result = lintGraceProject(root, { profile: "autonomous" });
+    expect(result.issues.map((issue) => issue.code)).toContain("autonomy.required-log-marker-not-found");
   });
 });

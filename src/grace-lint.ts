@@ -11,6 +11,7 @@ export type {
   LanguageAnalysis,
   LintIssue,
   LintOptions,
+  LintProfile,
   LintResult,
   LintSeverity,
   MapMode,
@@ -28,10 +29,19 @@ function writeResult(format: string, result: LintResult) {
   process.stdout.write(`${formatTextReport(result)}\n`);
 }
 
+function resolveProfile(value: unknown) {
+  const profile = String(value ?? "standard");
+  if (profile !== "standard" && profile !== "autonomous") {
+    throw new Error(`Unsupported profile \`${profile}\`. Use \`standard\` or \`autonomous\`.`);
+  }
+
+  return profile;
+}
+
 export const lintCommand = defineCommand({
   meta: {
     name: "lint",
-    description: "Lint GRACE artifacts, XML tag conventions, semantic markup, and role-aware module maps.",
+    description: "Lint GRACE artifacts, XML tag conventions, semantic markup, role-aware module maps, and optional autonomy readiness.",
   },
   args: {
     path: {
@@ -46,6 +56,11 @@ export const lintCommand = defineCommand({
       description: "Output format: text or json",
       default: "text",
     },
+    profile: {
+      type: "string",
+      description: "Lint profile: standard or autonomous",
+      default: "standard",
+    },
     allowMissingDocs: {
       type: "boolean",
       description: "Allow repositories that do not yet have full GRACE docs",
@@ -54,12 +69,14 @@ export const lintCommand = defineCommand({
   },
   async run(context) {
     const format = String(context.args.format ?? "text");
+    const profile = resolveProfile(context.args.profile);
     if (!isValidTextFormat(format)) {
       throw new Error(`Unsupported format \`${format}\`. Use \`text\` or \`json\`.`);
     }
 
     const result = lintGraceProject(String(context.args.path ?? "."), {
       allowMissingDocs: Boolean(context.args.allowMissingDocs),
+      profile,
     });
 
     writeResult(format, result);

@@ -20,6 +20,7 @@ It must answer:
 - did the system produce the correct result?
 - did it follow an acceptable execution path?
 - can another agent debug the failure from the evidence left behind?
+- is the module safe enough to hand to a longer autonomous run without relying on hidden model reasoning?
 
 Use contracts for **expected behavior**, semantic blocks for **traceability**, and tests/logs for **evidence**.
 
@@ -78,6 +79,7 @@ Also refresh project-wide policy when needed:
 - redaction rules
 - deterministic-first policy
 - module/wave/phase split
+- autonomy-gate expectations for scenarios, markers, and operational packets
 
 ### Step 5: Choose Evidence Types Per Scenario
 For each scenario, decide which evidence type to use:
@@ -147,6 +149,17 @@ Use this packet to drive `$grace-fix` or to hand off the issue to another agent 
 
 If `docs/operational-packets.xml` exists, align the handoff to its canonical `FailurePacket` fields.
 
+### Step 10: Rate Autonomy Readiness
+Before calling verification complete, give the module or flow a simple autonomy assessment:
+
+- do module-local commands exist and run quickly enough for worker loops?
+- do scenarios cover both success and failure behavior?
+- do required markers or traces make divergence observable?
+- is there a wave-level or phase-level follow-up when local checks are not enough?
+- do the execution packet and failure packet have enough named fields that another agent can continue without guessing?
+
+If any answer is no, document the gap explicitly in `docs/verification-plan.xml` or in the verification handoff.
+
 ## Verification Rules
 - Deterministic assertions first, semantic trace evaluation second
 - Logs are evidence, not decoration
@@ -158,6 +171,7 @@ If `docs/operational-packets.xml` exists, align the handoff to its canonical `Fa
 - Prefer source-adjacent tests and narrow fakes over giant opaque harnesses
 - If verification is weak, improve observability before adding more agents
 - Prefer module-level checks during worker execution and reserve broader suites for wave or phase gates
+- Treat `grace lint --profile autonomous` as a cheap gate for whether the current verification surface is mature enough for longer autonomous execution
 
 ## Deliverables
 When using this skill, produce:
@@ -168,6 +182,7 @@ When using this skill, produce:
 4. the tests or harness changes needed
 5. the recommended verification level split across module, wave, and phase
 6. a brief assessment of whether the module is safe for autonomous or multi-agent execution
+7. any packet or checkpoint fields that must exist before long autonomous runs are allowed
 
 ## When to Use It
 - Before a first serious `$grace-execute` or `$grace-multiagent-execute` run
