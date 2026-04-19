@@ -2,6 +2,7 @@
 
 import { defineCommand, type CommandDef, runMain } from "citty";
 
+import { formatLintExplanation, getLintIssueGuide } from "./lint/catalog";
 import { formatTextReport, isValidTextFormat, lintGraceProject } from "./lint/core";
 import type { LintOptions, LintResult } from "./lint/types";
 
@@ -38,6 +39,27 @@ function resolveProfile(value: unknown) {
   return profile;
 }
 
+function resolveFailOn(value: unknown) {
+  const failOn = String(value ?? "errors");
+  if (failOn !== "errors" && failOn !== "warnings" && failOn !== "never") {
+    throw new Error(`Unsupported fail-on policy \`${failOn}\`. Use \`errors\`, \`warnings\`, or \`never\`.`);
+  }
+
+  return failOn;
+}
+
+function shouldFail(result: LintResult, failOn: string) {
+  if (failOn === "never") {
+    return false;
+  }
+
+  if (failOn === "warnings") {
+    return result.summary.issues > 0;
+  }
+
+  return result.summary.errors > 0;
+}
+
 export const lintCommand = defineCommand({
   meta: {
     name: "lint",
@@ -61,6 +83,20 @@ export const lintCommand = defineCommand({
       description: "Lint profile: standard or autonomous",
       default: "standard",
     },
+    explain: {
+      type: "string",
+      description: "Explain one lint issue code instead of linting a project",
+    },
+    remediate: {
+      type: "boolean",
+      description: "Include explanation and remediation hints in text output",
+      default: false,
+    },
+    failOn: {
+      type: "string",
+      description: "Exit policy: errors, warnings, or never",
+      default: "errors",
+    },
     allowMissingDocs: {
       type: "boolean",
       description: "Allow repositories that do not yet have full GRACE docs",
@@ -70,8 +106,20 @@ export const lintCommand = defineCommand({
   async run(context) {
     const format = String(context.args.format ?? "text");
     const profile = resolveProfile(context.args.profile);
+    const failOn = resolveFailOn(context.args.failOn);
     if (!isValidTextFormat(format)) {
       throw new Error(`Unsupported format \`${format}\`. Use \`text\` or \`json\`.`);
+    }
+
+    if (context.args.explain) {
+      const code = String(context.args.explain);
+      if (format === "json") {
+        process.stdout.write(`${JSON.stringify({ schemaVersion: "1.0.0", tool: "grace-lint", guide: getLintIssueGuide(code) }, null, 2)}\n`);
+        return;
+      }
+
+      process.stdout.write(`${formatLintExplanation(code)}\n`);
+      return;
     }
 
     const result = lintGraceProject(String(context.args.path ?? "."), {
@@ -79,8 +127,12 @@ export const lintCommand = defineCommand({
       profile,
     });
 
-    writeResult(format, result);
-    process.exitCode = result.issues.some((issue) => issue.severity === "error") ? 1 : 0;
+    if (format === "json") {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    } else {
+      process.stdout.write(`${formatTextReport(result, { remediate: Boolean(context.args.remediate) })}\n`);
+    }
+    process.exitCode = shouldFail(result, failOn) ? 1 : 0;
   },
 });
 

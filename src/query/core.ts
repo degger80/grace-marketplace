@@ -19,6 +19,8 @@ import type {
   ModuleRecord,
   ModuleVerificationRecord,
   PlanStepRecord,
+  VerificationFindOptions,
+  VerificationMatch,
   VerificationScenario,
 } from "./types";
 
@@ -588,6 +590,10 @@ export function getModuleVerificationIds(moduleRecord: ModuleRecord) {
   return moduleRecord.verifications.map((entry) => entry.id).sort();
 }
 
+export function getModuleImplementationFiles(moduleRecord: ModuleRecord) {
+  return moduleRecord.localFiles.filter((file) => !/(^|\/)(__tests__|tests)(\/|$)|(^|\/)(test_[^/]+|[^/]+\.(test|spec)\.[^.]+)$/.test(file.path));
+}
+
 export function loadGraceArtifactIndex(projectRoot: string): GraceArtifactIndex {
   const root = path.resolve(projectRoot);
   ensureRequiredDocs(root);
@@ -814,4 +820,124 @@ export function resolveGovernedFile(index: GraceArtifactIndex, target: string) {
   }
 
   return fileRecord;
+}
+
+function matchesVerificationModuleFilter(moduleRecord: ModuleRecord | null, moduleFilter?: string) {
+  if (!moduleFilter) {
+    return true;
+  }
+
+  const normalizedFilter = moduleFilter.toLowerCase();
+  if (!moduleRecord) {
+    return false;
+  }
+
+  return moduleRecord.id.toLowerCase() === normalizedFilter || getModuleName(moduleRecord).toLowerCase().includes(normalizedFilter);
+}
+
+export function findVerifications(index: GraceArtifactIndex, options: VerificationFindOptions = {}) {
+  const query = options.query?.trim();
+  const normalizedQuery = query?.toLowerCase();
+
+  const matches: VerificationMatch[] = [];
+  for (const entry of index.verifications) {
+    const moduleRecord = entry.moduleId ? index.modules.find((module) => module.id === entry.moduleId) ?? null : null;
+    if (!matchesVerificationModuleFilter(moduleRecord, options.module)) {
+      continue;
+    }
+
+    if (options.priority && (entry.priority ?? "").toLowerCase() !== options.priority.toLowerCase()) {
+      continue;
+    }
+
+    if (!normalizedQuery) {
+      matches.push({
+        verification: entry,
+        module: moduleRecord,
+        score: 1,
+        matchedBy: ["filters"],
+      });
+      continue;
+    }
+
+    const matchedBy = new Set<string>();
+    let score = 0;
+    score = Math.max(score, applyTextMatch(matchedBy, "id", normalizedQuery, entry.id, 100, 70));
+    score = Math.max(score, applyTextMatch(matchedBy, "module-id", normalizedQuery, entry.moduleId, 80, 50));
+    score = Math.max(score, applyTextMatch(matchedBy, "priority", normalizedQuery, entry.priority, 40, 20));
+    score = Math.max(score, applyTextMatch(matchedBy, "module-name", normalizedQuery, moduleRecord ? getModuleName(moduleRecord) : undefined, 70, 45));
+
+    for (const testFile of entry.testFiles) {
+      score = Math.max(score, applyTextMatch(matchedBy, "test-file", normalizedQuery, testFile, 65, 35));
+    }
+    for (const command of entry.moduleChecks) {
+      score = Math.max(score, applyTextMatch(matchedBy, "module-check", normalizedQuery, command, 50, 25));
+    }
+    for (const scenario of entry.scenarios) {
+      score = Math.max(score, applyTextMatch(matchedBy, "scenario", normalizedQuery, scenario.text, 55, 25));
+    }
+    for (const marker of entry.requiredLogMarkers) {
+      score = Math.max(score, applyTextMatch(matchedBy, "log-marker", normalizedQuery, marker, 60, 30));
+    }
+    for (const assertion of entry.requiredTraceAssertions) {
+      score = Math.max(score, applyTextMatch(matchedBy, "trace-assertion", normalizedQuery, assertion, 45, 20));
+    }
+
+    if (score > 0) {
+      matches.push({
+        verification: entry,
+        module: moduleRecord,
+        score,
+        matchedBy: Array.from(matchedBy).sort(),
+      });
+    }
+  }
+
+  return matches.sort((left, right) => {
+    if (right.score !== left.score) {
+      return right.score - left.score;
+    }
+
+    return left.verification.id.localeCompare(right.verification.id);
+  });
+}
+
+export function resolveVerification(index: GraceArtifactIndex, target: string) {
+  const normalizedTarget = target.trim().toLowerCase();
+  const exact = index.verifications.find((entry) => entry.id.toLowerCase() === normalizedTarget);
+  if (exact) {
+    return {
+      verification: exact,
+      module: exact.moduleId ? index.modules.find((module) => module.id === exact.moduleId) ?? null : null,
+      score: 100,
+      matchedBy: ["id"],
+    } satisfies VerificationMatch;
+  }
+
+  try {
+    const moduleRecord = resolveModule(index, target);
+    if (moduleRecord.verifications.length === 1) {
+      return {
+        verification: moduleRecord.verifications[0],
+        module: moduleRecord,
+        score: 90,
+        matchedBy: ["module"],
+      } satisfies VerificationMatch;
+    }
+
+    if (moduleRecord.verifications.length > 1) {
+      throw new Error(
+        `Module \`${moduleRecord.id}\` has multiple verification entries (${moduleRecord.verifications.map((entry) => entry.id).join(", ")}). Use \`grace verification find ${target}\` to inspect candidates.`,
+      );
+    }
+    if (moduleRecord.verifications.length === 0) {
+      throw new Error(`Module \`${moduleRecord.id}\` has no verification entries.`);
+    }
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.startsWith("No module found for")) {
+      throw error;
+    }
+  }
+
+  throw new Error(`No verification found for \`${target}\`. Use \`grace verification find ${target}\` to inspect candidates.`);
 }

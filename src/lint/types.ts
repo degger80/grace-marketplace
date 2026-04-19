@@ -11,15 +11,26 @@ export type LintIssue = {
   file: string;
   line?: number;
   message: string;
+  title?: string;
+  explanation?: string;
+  remediation?: string[];
 };
 
 export type LintResult = {
+  schemaVersion: string;
+  tool: "grace-lint";
+  generatedAt: string;
   root: string;
   profile: LintProfile;
   filesChecked: number;
   governedFiles: number;
   xmlFilesChecked: number;
   issues: LintIssue[];
+  summary: {
+    issues: number;
+    errors: number;
+    warnings: number;
+  };
 };
 
 export type LintOptions = {

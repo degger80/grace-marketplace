@@ -132,3 +132,48 @@ export type ModuleMatch = {
   score: number;
   matchedBy: string[];
 };
+
+export type VerificationFindOptions = {
+  query?: string;
+  module?: string;
+  priority?: string;
+};
+
+export type VerificationMatch = {
+  verification: ModuleVerificationRecord;
+  module: ModuleRecord | null;
+  score: number;
+  matchedBy: string[];
+};
+
+export type ModuleHealthIssue = {
+  severity: "error" | "warning";
+  code: string;
+  message: string;
+  remediation: string;
+};
+
+export type ModuleHealthRecord = {
+  moduleId: string;
+  name: string;
+  type?: string;
+  path?: string;
+  state: "ready" | "attention" | "blocked";
+  verificationIds: string[];
+  implementationFiles: string[];
+  governedTestFiles: string[];
+  verificationTestFiles: string[];
+  blockers: ModuleHealthIssue[];
+  warnings: ModuleHealthIssue[];
+  summary: {
+    hasPlan: boolean;
+    hasGraph: boolean;
+    hasImplementationFiles: boolean;
+    hasVerification: boolean;
+    hasVerificationTests: boolean;
+    pendingSteps: number;
+    completedSteps: number;
+    autonomyReady: boolean;
+  };
+  nextAction: string;
+};

@@ -1,7 +1,7 @@
 {
   "name": "@osovv/grace-cli",
-  "version": "3.8.0",
-  "description": "GRACE CLI for linting, status snapshots, semantic markup, and querying GRACE artifacts with a Bun-powered grace binary.",
+  "version": "3.10.0",
+  "description": "GRACE CLI for linting, status snapshots, module health, verification queries, semantic markup, and querying GRACE artifacts with a Bun-powered grace binary.",
   "license": "MIT",
   "homepage": "https://github.com/osovv/grace-marketplace#readme",
   "repository": {
@@ -31,6 +31,7 @@
     "src/grace-lint.ts",
     "src/grace-module.ts",
     "src/grace-status.ts",
+    "src/grace-verification.ts",
     "src/lint",
     "src/query",
     "README.md",
@@ -46,8 +47,12 @@
     "grace:lint": "bun run ./src/grace.ts lint",
     "lint": "bun run ./src/grace.ts lint",
     "test": "bun test",
+    "validate:cli": "bun run ./src/grace.ts lint --path . --allow-missing-docs && bun run ./src/grace.ts status --path . --json --fail-on never",
+    "validate:ci": "bun test && bun run validate:cli && bun run ./scripts/validate-marketplace.ts",
     "validate:marketplace": "bun run ./scripts/validate-marketplace.ts",
-    "prepublishOnly": "bun test && bun run ./src/grace.ts lint --path . --allow-missing-docs && bun run ./scripts/validate-marketplace.ts"
+    "validate:release": "bun run validate:ci && bun run ./scripts/release-checklist.ts",
+    "release:checklist": "bun run ./scripts/release-checklist.ts",
+    "prepublishOnly": "bun run validate:release"
   },
   "bin": {
     "grace": "./src/grace.ts"

@@ -16,7 +16,9 @@ const repoRoot = process.cwd();
 const marketplaceDir = path.join(repoRoot, ".claude-plugin");
 const marketplacePath = path.join(marketplaceDir, "marketplace.json");
 const readmePath = path.join(repoRoot, "README.md");
+const packagePath = path.join(repoRoot, "package.json");
 const openPackagePath = path.join(repoRoot, "openpackage.yml");
+const changelogPath = path.join(repoRoot, "CHANGELOG.md");
 const componentFields = ["skills", "agents", "commands"] as const;
 const pluginComponentFields = ["commands", "agents", "hooks", "mcpServers", "lspServers", "outputStyles"] as const;
 
@@ -60,6 +62,16 @@ function getOpenPackageVersion(): string | null {
   const openPackage = readFileSync(openPackagePath, "utf8");
   const match = openPackage.match(/^version:\s*([^\s]+)\s*$/m);
   return match?.[1] ?? null;
+}
+
+function getPackageVersion(): string | null {
+  const packageJson = readJson(packagePath);
+  return typeof packageJson.version === "string" ? packageJson.version : null;
+}
+
+function changelogHasVersion(version: string) {
+  const changelog = readFileSync(changelogPath, "utf8");
+  return new RegExp(`^## \\[${version.replaceAll(".", "\\.")}\\]`, "m").test(changelog);
 }
 
 function normalizeComparableValue(value: unknown): string {
@@ -240,6 +252,7 @@ function validate(): ValidationResult {
   const scopedEntries = getScopedEntries(pluginEntries, changedFiles);
   const readmeVersion = getReadmeVersion();
   const openPackageVersion = getOpenPackageVersion();
+  const packageVersion = getPackageVersion();
   const marketplaceVersion = typeof marketplace.metadata === "object" && marketplace.metadata
     ? String((marketplace.metadata as JsonObject).version ?? "")
     : "";
@@ -254,6 +267,10 @@ function validate(): ValidationResult {
 
   if (!openPackageVersion) {
     errors.push("openpackage.yml: missing version");
+  }
+
+  if (!packageVersion) {
+    errors.push("package.json: missing version");
   }
 
   const rootManifestFiles = readdirSync(marketplaceDir);
@@ -336,10 +353,18 @@ function validate(): ValidationResult {
       );
     }
 
+    if (packageVersion && String(entry.version ?? "") !== packageVersion) {
+      errors.push(`${pluginName}: version mismatch between marketplace.json (${entry.version}) and package.json (${packageVersion})`);
+    }
+
     if (marketplaceVersion && String(entry.version ?? "") !== marketplaceVersion) {
       errors.push(
         `${pluginName}: version mismatch between marketplace metadata (${marketplaceVersion}) and plugin entry (${entry.version})`,
       );
+    }
+
+    if (String(entry.version ?? "") && !changelogHasVersion(String(entry.version))) {
+      errors.push(`${pluginName}: CHANGELOG.md is missing an entry for version ${entry.version}`);
     }
 
     const pluginManifestFiles = readdirSync(pluginManifestDir);

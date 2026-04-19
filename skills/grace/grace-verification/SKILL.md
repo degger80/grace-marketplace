@@ -149,6 +149,11 @@ Use this packet to drive `$grace-fix` or to hand off the issue to another agent 
 
 If `docs/operational-packets.xml` exists, align the handoff to its canonical `FailurePacket` fields.
 
+If the optional `grace` CLI is available, you may also use:
+- `grace verification show V-M-XXX --path <project-root>` to read the current verification entry directly
+- `grace verification find <query> --path <project-root>` to locate verification entries by module, scenario, marker, or command
+- `grace module health M-XXX --path <project-root>` when you need the module-scoped remediation picture alongside the verification record
+
 ### Step 10: Rate Autonomy Readiness
 Before calling verification complete, give the module or flow a simple autonomy assessment:
 

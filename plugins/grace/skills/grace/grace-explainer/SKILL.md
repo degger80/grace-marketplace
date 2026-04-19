@@ -101,9 +101,14 @@ GRACE also has an optional CLI package, `@osovv/grace-cli`, which installs the `
 Current public commands:
 - `grace lint --path /path/to/project`
 - `grace lint --profile autonomous --path /path/to/project`
+- `grace lint --explain docs.missing-required-artifact`
 - `grace status --path /path/to/project`
+- `grace status --with modules --path /path/to/project`
 - `grace module find auth --path /path/to/project`
-- `grace module show M-AUTH --path /path/to/project --with verification`
+- `grace module show M-AUTH --path /path/to/project --with verification,health`
+- `grace module health M-AUTH --path /path/to/project`
+- `grace verification find auth --path /path/to/project`
+- `grace verification show V-M-AUTH --path /path/to/project`
 - `grace file show src/auth/index.ts --path /path/to/project --contracts --blocks`
 
 Use the CLI for:
@@ -111,6 +116,7 @@ Use the CLI for:
 - unique-tag convention anti-patterns in XML
 - graph/plan/verification reference mismatches
 - autonomy-readiness gaps in packet quality, verification depth, and observable evidence
+- module-scoped readiness, blockers, and remediation hints
 - MODULE_MAP vs export drift in supported source files
 - resolving module IDs from names, paths, dependencies, and verification refs
 - reading shared/public module context from the XML artifacts
@@ -125,8 +131,10 @@ The CLI does not replace `$grace-reviewer`, `$grace-refresh`, or `$grace-verific
 
 Typical preflight:
 - `grace status` for the current health snapshot and next action
+- `grace status --with modules` when you also need per-module health summaries
 - `grace lint` for structural drift
 - `grace lint --profile autonomous` before long autonomous execution
+- `grace lint --explain <code>` when one issue needs built-in remediation guidance
 
 ## Development Workflow
 

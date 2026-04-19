@@ -36,6 +36,14 @@ function writeStatusProject(root: string, options: { includeRuntime?: boolean } 
     `<TechnologyStack VERSION="0.2.0">
   <Runtime>bun 1.3.8</Runtime>
   <Language>typescript 6.x</Language>
+  <PreferredAgentStack>
+    <preferred-runtime-library>bun</preferred-runtime-library>
+    <preferred-test-library>bun:test</preferred-test-library>
+  </PreferredAgentStack>
+  <AutonomyPolicy>
+    <default-execution-profile>balanced</default-execution-profile>
+    <max-fix-attempts-per-step>2</max-fix-attempts-per-step>
+  </AutonomyPolicy>
 </TechnologyStack>`,
   );
   writeProjectFile(
@@ -102,7 +110,12 @@ function writeStatusProject(root: string, options: { includeRuntime?: boolean } 
     "docs/operational-packets.xml",
     `<OperationalPackets VERSION="0.1.0">
   <ExecutionPacketTemplate>
-    <ExecutionPacket />
+    <ExecutionPacket>
+      <assumptions />
+      <stop-conditions />
+      <retry-budget>2</retry-budget>
+      <checkpoint-fields />
+    </ExecutionPacket>
   </ExecutionPacketTemplate>
   <GraphDeltaTemplate>
     <GraphDelta />
@@ -113,6 +126,9 @@ function writeStatusProject(root: string, options: { includeRuntime?: boolean } 
   <FailurePacketTemplate>
     <FailurePacket />
   </FailurePacketTemplate>
+  <CheckpointReportTemplate>
+    <CheckpointReport />
+  </CheckpointReportTemplate>
 </OperationalPackets>`,
   );
 
@@ -186,6 +202,8 @@ describe("grace status", () => {
     writeStatusProject(root);
 
     const result = collectProjectStatus(root);
+    expect(result.summary.moduleSummaryLoaded).toBe(false);
+    expect(result.summary.moduleCount).toBe(1);
     expect(result.metrics.sourceFiles).toBe(1);
     expect(result.metrics.testFiles).toBe(1);
     expect(result.autonomy.ready).toBe(true);
@@ -210,6 +228,15 @@ describe("grace status", () => {
     expect(output).toContain("Autonomy gate: READY");
   });
 
+  it("includes module health details when requested", () => {
+    const root = createProject();
+    writeStatusProject(root);
+    const result = collectProjectStatus(root, { includeModules: true });
+
+    expect(result.modules?.map((module) => module.moduleId)).toEqual(["M-EXAMPLE"]);
+    expect(result.summary.readyModules).toBe(1);
+  });
+
   it("does not treat test-only linkage as implemented module coverage", () => {
     const root = createProject();
     writeStatusProject(root, { includeRuntime: false });
@@ -217,5 +244,59 @@ describe("grace status", () => {
     const result = collectProjectStatus(root);
     expect(result.health.codebaseModules).toBe(0);
     expect(result.health.sharedModulesWithoutGovernedFiles).toEqual(["M-EXAMPLE"]);
+  });
+
+  it("supports JSON output and fail-on errors for CI-oriented status checks", () => {
+    const root = createProject();
+    writeStatusProject(root, { includeRuntime: false });
+    const repoRoot = path.resolve(import.meta.dir, "..");
+
+    const statusResult = Bun.spawnSync({
+      cmd: [process.execPath, "run", "./src/grace.ts", "status", "--path", root, "--with", "modules", "--json", "--fail-on", "errors"],
+      cwd: repoRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    expect(statusResult.exitCode).toBe(1);
+    const parsed = JSON.parse(Buffer.from(statusResult.stdout).toString("utf8")) as { schemaVersion: string; modules: Array<{ state: string }> };
+    expect(parsed.schemaVersion).toBe("1.0.0");
+    expect(parsed.modules[0].state).toBe("blocked");
+  });
+
+  it("fails on blocked module health when module summaries are requested", () => {
+    const root = createProject();
+    writeStatusProject(root);
+    writeProjectFile(
+      root,
+      "src/rogue.ts",
+      `// START_MODULE_CONTRACT
+//   PURPOSE: Rogue local-only module.
+//   SCOPE: Demonstrate blocked module health outside shared docs.
+//   DEPENDS: none
+//   LINKS: M-ROGUE
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   rogue - Rogue helper.
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.2.0 - Added rogue local-only module]
+// END_CHANGE_SUMMARY
+export const rogue = true;
+`,
+    );
+    const repoRoot = path.resolve(import.meta.dir, "..");
+
+    const statusResult = Bun.spawnSync({
+      cmd: [process.execPath, "run", "./src/grace.ts", "status", "--path", root, "--with", "modules", "--fail-on", "errors"],
+      cwd: repoRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    expect(statusResult.exitCode).toBe(1);
+    expect(Buffer.from(statusResult.stdout).toString("utf8")).toContain("M-ROGUE");
   });
 });

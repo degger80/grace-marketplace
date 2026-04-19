@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { loadGraceLintConfig } from "./config";
 import { getLanguageAdapter } from "./adapters/base";
+import { withLintIssueGuide } from "./catalog";
 import { loadGraceArtifactIndex } from "../query/core";
 import {
   collectCodeFiles,
@@ -449,10 +450,19 @@ function lintAutonomousReadiness(
   ignoredDirs: string[],
 ) {
   const isLikelyTestPath = (relativePath: string) => /(^|\/)(__tests__|tests)(\/|$)|(^|\/)(test_[^/]+|[^/]+\.(test|spec)\.[^.]+)$/.test(relativePath);
+  const looksLikeEvidenceEmission = (line: string) => /(console\.|logger\.|tracer\.|trace\(|emit\(|\.(info|warn|error|debug|trace)\s*\()/.test(line);
+  const parseMarkerBlockName = (marker: string) => {
+    const match = marker.match(/\[([^\]]+)\]\s*$/);
+    if (!match) {
+      return undefined;
+    }
+
+    return match[1].startsWith("BLOCK_") ? match[1].slice("BLOCK_".length) : undefined;
+  };
   const lineHasRuntimeMarker = (text: string, marker: string) =>
     text
       .split("\n")
-      .some((line) => line.includes(marker) && !/^\s*(\/\/|#|--|;+|\*)/.test(line));
+      .some((line) => line.includes(marker) && !/^\s*(\/\/|#|--|;+|\*)/.test(line) && looksLikeEvidenceEmission(line));
 
   if (!operationalPackets) {
     addAutonomyIssue(
@@ -462,6 +472,66 @@ function lintAutonomousReadiness(
       OPTIONAL_PACKET_DOC,
       "Autonomous execution requires docs/operational-packets.xml so controller, worker, and failure handoffs have a shared packet shape.",
     );
+  } else {
+    const packetRequirements = [
+      {
+        pattern: /<CheckpointReportTemplate(?=[\s>])/, code: "autonomy.packets-missing-checkpoint-template",
+        message: "Autonomous execution packets should include a CheckpointReportTemplate for visible step handoff.",
+      },
+      {
+        pattern: /<assumptions(?=[\s>])/, code: "autonomy.packets-missing-assumptions",
+        message: "Execution packets should record assumptions so future agents know what was accepted as stable context.",
+      },
+      {
+        pattern: /<stop-conditions(?=[\s>])/, code: "autonomy.packets-missing-stop-conditions",
+        message: "Execution packets should define stop-conditions so long runs halt instead of drifting silently.",
+      },
+      {
+        pattern: /<retry-budget(?=[\s>])/, code: "autonomy.packets-missing-retry-budget",
+        message: "Execution packets should define a retry-budget for bounded fix loops.",
+      },
+      {
+        pattern: /<checkpoint-fields(?=[\s>])/, code: "autonomy.packets-missing-checkpoint-fields",
+        message: "Execution packets should define checkpoint-fields for assumptions, commands, evidence, and next action.",
+      },
+    ];
+
+    for (const requirement of packetRequirements) {
+      if (!requirement.pattern.test(operationalPackets)) {
+        addAutonomyIssue(result, "error", requirement.code, OPTIONAL_PACKET_DOC, requirement.message);
+      }
+    }
+  }
+
+  if (!docs["docs/technology.xml"]) {
+    addAutonomyIssue(
+      result,
+      "error",
+      "autonomy.missing-technology-artifact",
+      "docs/technology.xml",
+      "Autonomous execution should be anchored to docs/technology.xml so the preferred stack and autonomy policy are explicit.",
+    );
+  } else {
+    const technologyDoc = docs["docs/technology.xml"];
+    if (!/<PreferredAgentStack(?=[\s>])/.test(technologyDoc)) {
+      addAutonomyIssue(
+        result,
+        "warning",
+        "autonomy.technology-missing-preferred-agent-stack",
+        "docs/technology.xml",
+        "Technology guidance should include PreferredAgentStack so workers know which runtime, test, and observability surfaces are preferred.",
+      );
+    }
+
+    if (!/<AutonomyPolicy(?=[\s>])/.test(technologyDoc)) {
+      addAutonomyIssue(
+        result,
+        "warning",
+        "autonomy.technology-missing-autonomy-policy",
+        "docs/technology.xml",
+        "Technology guidance should include AutonomyPolicy so retry budgets and replan triggers are explicit.",
+      );
+    }
   }
 
   if (!docs["docs/knowledge-graph.xml"] || !docs["docs/development-plan.xml"] || !docs["docs/verification-plan.xml"]) {
@@ -491,6 +561,7 @@ function lintAutonomousReadiness(
     .filter((file) => !isLikelyTestPath(file.path));
 
   for (const moduleRecord of sharedModules) {
+    const moduleImplementationFiles = moduleRecord.localFiles.filter((file) => !isLikelyTestPath(file.path));
     if (moduleRecord.verifications.length === 0) {
       addAutonomyIssue(
         result,
@@ -498,6 +569,16 @@ function lintAutonomousReadiness(
         "autonomy.module-missing-verification",
         "docs/verification-plan.xml",
         `Module \`${moduleRecord.id}\` has shared planning or graph context but no matching verification entry. Autonomous runs require a V-M entry per shared module.`,
+      );
+    }
+
+    if (moduleImplementationFiles.length === 0) {
+      addAutonomyIssue(
+        result,
+        "error",
+        "autonomy.module-missing-implementation-files",
+        "docs/knowledge-graph.xml",
+        `Module \`${moduleRecord.id}\` has no linked non-test governed files. Autonomous execution needs a real implementation surface, not only tests or shared-doc declarations.`,
       );
     }
 
@@ -566,10 +647,38 @@ function lintAutonomousReadiness(
           `Verification entry \`${entry.id}\` references test file \`${testFile}\`, but that file does not exist on disk.`,
         );
       }
+
+      const governedTestRecord = index.files.find((file) => file.path === testFile);
+      if (governedTestRecord && entry.moduleId && !governedTestRecord.linkedModuleIds.includes(entry.moduleId)) {
+        addAutonomyIssue(
+          result,
+          "error",
+          "autonomy.verification-test-file-unlinked-module",
+          "docs/verification-plan.xml",
+          `Verification entry \`${entry.id}\` references governed test file \`${testFile}\`, but that file is not linked to module \`${entry.moduleId}\`.`,
+        );
+      }
+
+      if (!entry.moduleChecks.some((check) => check.includes(testFile) || check.includes(path.dirname(testFile)))) {
+        addAutonomyIssue(
+          result,
+          "warning",
+          "autonomy.verification-module-check-does-not-reference-test-file",
+          "docs/verification-plan.xml",
+          `Verification entry \`${entry.id}\` does not have a module-check that clearly targets \`${testFile}\` or its containing directory.`,
+        );
+      }
     }
 
     for (const marker of entry.requiredLogMarkers) {
-      if (!implementationFiles.some((file) => lineHasRuntimeMarker(file.text, marker))) {
+      const scopedImplementationFiles = entry.moduleId
+        ? implementationFiles.filter((file) => {
+            const moduleRecord = index.modules.find((module) => module.id === entry.moduleId);
+            return moduleRecord?.localFiles.some((moduleFile) => moduleFile.path === file.path && !isLikelyTestPath(moduleFile.path));
+          })
+        : implementationFiles;
+
+      if (!scopedImplementationFiles.some((file) => lineHasRuntimeMarker(file.text, marker))) {
         addAutonomyIssue(
           result,
           "error",
@@ -577,6 +686,20 @@ function lintAutonomousReadiness(
           "docs/verification-plan.xml",
           `Verification entry \`${entry.id}\` requires log marker \`${marker}\`, but that marker was not found in the current codebase.`,
         );
+      }
+
+      const requiredBlock = parseMarkerBlockName(marker);
+      if (requiredBlock && entry.moduleId) {
+        const moduleRecord = index.modules.find((module) => module.id === entry.moduleId);
+        if (moduleRecord && !moduleRecord.localFiles.some((file) => !isLikelyTestPath(file.path) && file.blocks.some((block) => block.name === requiredBlock))) {
+          addAutonomyIssue(
+            result,
+            "error",
+            "autonomy.required-log-marker-block-not-found",
+            "docs/verification-plan.xml",
+            `Verification entry \`${entry.id}\` requires log marker \`${marker}\`, but no linked runtime file exposes BLOCK_${requiredBlock}.`,
+          );
+        }
       }
     }
 
@@ -802,21 +925,36 @@ export function lintGraceProject(projectRoot: string, options: LintOptions = {})
   const profile: LintProfile = options.profile ?? "standard";
 
   const docs = {
+    "docs/technology.xml": readTextIfExists(path.join(root, "docs/technology.xml")),
     "docs/knowledge-graph.xml": readTextIfExists(path.join(root, "docs/knowledge-graph.xml")),
     "docs/development-plan.xml": readTextIfExists(path.join(root, "docs/development-plan.xml")),
     "docs/verification-plan.xml": readTextIfExists(path.join(root, "docs/verification-plan.xml")),
   } satisfies Record<string, string | null>;
 
   const result: LintResult = {
+    schemaVersion: "1.0.0",
+    tool: "grace-lint",
+    generatedAt: new Date().toISOString(),
     root,
     profile,
     filesChecked: 0,
     governedFiles: 0,
     xmlFilesChecked: 0,
     issues: [...configIssues],
+    summary: {
+      issues: 0,
+      errors: 0,
+      warnings: 0,
+    },
   };
 
   if (configIssues.some((issue) => issue.severity === "error" && issue.file === LINT_CONFIG_FILE)) {
+    result.issues = result.issues.map((issue) => withLintIssueGuide(issue));
+    result.summary = {
+      issues: result.issues.length,
+      errors: result.issues.filter((issue) => issue.severity === "error").length,
+      warnings: result.issues.filter((issue) => issue.severity === "warning").length,
+    };
     return result;
   }
 
@@ -944,10 +1082,17 @@ export function lintGraceProject(projectRoot: string, options: LintOptions = {})
     lintGovernedFile(result, root, filePath, text);
   }
 
+  result.issues = result.issues.map((issue) => withLintIssueGuide(issue));
+  result.summary = {
+    issues: result.issues.length,
+    errors: result.issues.filter((issue) => issue.severity === "error").length,
+    warnings: result.issues.filter((issue) => issue.severity === "warning").length,
+  };
+
   return result;
 }
 
-export function formatTextReport(result: LintResult) {
+export function formatTextReport(result: LintResult, options: { remediate?: boolean } = {}) {
   const errors = result.issues.filter((issue) => issue.severity === "error");
   const warnings = result.issues.filter((issue) => issue.severity === "warning");
   const lines = [
@@ -958,13 +1103,19 @@ export function formatTextReport(result: LintResult) {
     `Code files checked: ${result.filesChecked}`,
     `Governed files checked: ${result.governedFiles}`,
     `XML files checked: ${result.xmlFilesChecked}`,
-    `Issues: ${result.issues.length} (errors: ${errors.length}, warnings: ${warnings.length})`,
+    `Issues: ${result.summary.issues} (errors: ${result.summary.errors}, warnings: ${result.summary.warnings})`,
   ];
 
   if (errors.length > 0) {
     lines.push("", "Errors:");
     for (const issue of errors) {
       lines.push(`- [${issue.code}] ${issue.file}${issue.line ? `:${issue.line}` : ""} ${issue.message}`);
+      if (options.remediate) {
+        lines.push(`  Explanation: ${issue.explanation ?? "n/a"}`);
+        for (const step of issue.remediation ?? []) {
+          lines.push(`  Fix: ${step}`);
+        }
+      }
     }
   }
 
@@ -972,6 +1123,12 @@ export function formatTextReport(result: LintResult) {
     lines.push("", "Warnings:");
     for (const issue of warnings) {
       lines.push(`- [${issue.code}] ${issue.file}${issue.line ? `:${issue.line}` : ""} ${issue.message}`);
+      if (options.remediate) {
+        lines.push(`  Explanation: ${issue.explanation ?? "n/a"}`);
+        for (const step of issue.remediation ?? []) {
+          lines.push(`  Fix: ${step}`);
+        }
+      }
     }
   }
 

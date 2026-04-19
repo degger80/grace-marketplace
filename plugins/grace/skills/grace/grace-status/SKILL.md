@@ -5,7 +5,7 @@ description: "Show the current health status of a GRACE project. Use to get an o
 
 Show the current state of the GRACE project, including whether it is safe to hand to a longer autonomous run.
 
-When the optional CLI is available, prefer `grace status --path <project-root>` for the initial report, then deepen with `grace lint`, `grace module show`, and `grace file show` only where needed.
+When the optional CLI is available, prefer `grace status --path <project-root>` for the initial report. Use `grace status --with modules --path <project-root>` when project-level health is not enough and you need module summaries before deeper investigation.
 
 ## Report Contents
 
@@ -46,7 +46,9 @@ If the report is specifically about autonomous execution readiness, also run `gr
 
 When the report needs focused navigation instead of raw artifact dumps, you may also use:
 - `grace module find <query> --path <project-root>` to resolve the relevant module from names, IDs, dependencies, or changed paths
-- `grace module show M-XXX --path <project-root> --with verification` for the shared/public module snapshot
+- `grace module show M-XXX --path <project-root> --with verification,health` for the shared/public module snapshot
+- `grace module health M-XXX --path <project-root>` for the module-scoped blockers, warnings, and next action
+- `grace verification show V-M-XXX --path <project-root>` for the linked verification entry itself
 - `grace file show <path> --path <project-root> --contracts --blocks` for the file-local/private markup snapshot
 
 ### 4. Recent Changes
@@ -60,6 +62,7 @@ Based on the status, suggest what to do next:
 - If plan and verification are ready but modules are missing — "Run `$grace-execute` or `$grace-multiagent-execute`"
 - If drift detected — "Run `$grace-refresh`"
 - If fast integrity signals are needed before deeper review — "Run `grace lint --path <project-root>`"
+- If one lint code needs direct remediation guidance — "Run `grace lint --explain <code>`"
 - If the next step is targeted investigation of one module or file — "Run `grace module show M-XXX --path <project-root> --with verification` or `grace file show <path> --path <project-root> --contracts --blocks`"
 - If tests or logs are too weak for autonomous work — "Run `$grace-verification`"
 - If autonomy blockers are present — "Run `grace lint --profile autonomous --path <project-root>` and strengthen verification or packet quality before execution"

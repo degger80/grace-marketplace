@@ -50,6 +50,23 @@ function writeBaseDocsWithoutVerification(root: string) {
 function writeCurrentDocs(root: string) {
   writeProjectFile(
     root,
+    "docs/technology.xml",
+    `<TechnologyStack VERSION="0.2.0">
+  <Runtime>bun 1.3.8</Runtime>
+  <Language>typescript 6.x</Language>
+  <PreferredAgentStack>
+    <preferred-runtime-library>bun</preferred-runtime-library>
+    <preferred-test-library>bun:test</preferred-test-library>
+  </PreferredAgentStack>
+  <AutonomyPolicy>
+    <default-execution-profile>balanced</default-execution-profile>
+    <max-fix-attempts-per-step>2</max-fix-attempts-per-step>
+  </AutonomyPolicy>
+</TechnologyStack>`,
+  );
+
+  writeProjectFile(
+    root,
     "docs/knowledge-graph.xml",
     `<KnowledgeGraph>
   <Project NAME="Example" VERSION="0.1.0">
@@ -126,7 +143,12 @@ function writeCurrentDocs(root: string) {
     "docs/operational-packets.xml",
     `<OperationalPackets VERSION="0.1.0">
   <ExecutionPacketTemplate>
-    <ExecutionPacket />
+    <ExecutionPacket>
+      <assumptions />
+      <stop-conditions />
+      <retry-budget>2</retry-budget>
+      <checkpoint-fields />
+    </ExecutionPacket>
   </ExecutionPacketTemplate>
   <GraphDeltaTemplate>
     <GraphDelta />
@@ -137,6 +159,9 @@ function writeCurrentDocs(root: string) {
   <FailurePacketTemplate>
     <FailurePacket />
   </FailurePacketTemplate>
+  <CheckpointReportTemplate>
+    <CheckpointReport />
+  </CheckpointReportTemplate>
 </OperationalPackets>`,
   );
 }
@@ -786,6 +811,8 @@ test("run", () => {
     const result = lintGraceProject(root, { profile: "autonomous" });
     const codes = result.issues.map((issue) => issue.code);
     expect(codes).toContain("autonomy.missing-operational-packets");
+    expect(codes).toContain("autonomy.missing-technology-artifact");
+    expect(codes).toContain("autonomy.module-missing-implementation-files");
     expect(codes).toContain("autonomy.step-missing-verification");
     expect(codes).toContain("autonomy.verification-test-file-missing-on-disk");
     expect(codes).toContain("autonomy.verification-missing-module-checks");
@@ -835,5 +862,131 @@ test("marker expectation only", () => {
 
     const result = lintGraceProject(root, { profile: "autonomous" });
     expect(result.issues.map((issue) => issue.code)).toContain("autonomy.required-log-marker-not-found");
+  });
+
+  it("does not accept inert runtime string literals as marker evidence", () => {
+    const root = createProject();
+    writeCurrentDocs(root);
+
+    writeProjectFile(
+      root,
+      "src/example.ts",
+      `// START_MODULE_CONTRACT
+//   PURPOSE: Run the example flow.
+//   SCOPE: Execute the happy path.
+//   DEPENDS: none
+//   LINKS: M-EXAMPLE
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   run - Execute the example flow.
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.1.0 - Added example module]
+// END_CHANGE_SUMMARY
+export function run() {
+  const marker = "[ExampleDomain][run][BLOCK_EXECUTE_FLOW]";
+  // START_BLOCK_EXECUTE_FLOW
+  return marker;
+  // END_BLOCK_EXECUTE_FLOW
+}
+`,
+    );
+
+    writeProjectFile(
+      root,
+      "src/example.test.ts",
+      `import { expect, test } from "bun:test";
+import { run } from "./example";
+
+test("run", () => {
+  expect(run()).toContain("BLOCK_EXECUTE_FLOW");
+});
+`,
+    );
+
+    const result = lintGraceProject(root, { profile: "autonomous" });
+    expect(result.issues.map((issue) => issue.code)).toContain("autonomy.required-log-marker-not-found");
+  });
+
+  it("explains lint issue codes through the CLI", () => {
+    const repoRoot = path.resolve(import.meta.dir, "..");
+    const result = Bun.spawnSync({
+      cmd: [process.execPath, "run", "./src/grace.ts", "lint", "--explain", "docs.missing-required-artifact"],
+      cwd: repoRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(Buffer.from(result.stdout).toString("utf8")).toContain("Missing Required GRACE Artifact");
+    expect(Buffer.from(result.stdout).toString("utf8")).toContain("Remediation");
+  });
+
+  it("supports fail-on warnings for CI-oriented lint runs", () => {
+    const root = createProject();
+    writeCurrentDocs(root);
+
+    writeProjectFile(
+      root,
+      "src/example.ts",
+      `// START_MODULE_CONTRACT
+//   PURPOSE: Run the example flow.
+//   SCOPE: Execute the happy path.
+//   DEPENDS: none
+//   LINKS: M-EXAMPLE
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   run - Execute the example flow.
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.1.0 - Added example module]
+// END_CHANGE_SUMMARY
+export function run() {
+  console.info("[ExampleDomain][run][BLOCK_EXECUTE_FLOW] ok");
+  // START_BLOCK_EXECUTE_FLOW
+  return "ok";
+  // END_BLOCK_EXECUTE_FLOW
+}
+`,
+    );
+
+    writeProjectFile(root, "src/example.test.ts", `export const value = 1;\n`);
+    writeProjectFile(
+      root,
+      "docs/verification-plan.xml",
+      `<VerificationPlan VERSION="0.1.0">
+  <ModuleVerification>
+    <V-M-EXAMPLE MODULE="M-EXAMPLE">
+      <test-files>
+        <file-1>src/example.test.ts</file-1>
+      </test-files>
+      <module-checks>
+        <command-1>bun test src/example.test.ts</command-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Primary success path returns ok.</scenario-1>
+      </scenarios>
+      <required-log-markers>
+        <marker-1>[ExampleDomain][run][BLOCK_EXECUTE_FLOW]</marker-1>
+      </required-log-markers>
+    </V-M-EXAMPLE>
+  </ModuleVerification>
+</VerificationPlan>`,
+    );
+
+    const repoRoot = path.resolve(import.meta.dir, "..");
+    const result = Bun.spawnSync({
+      cmd: [process.execPath, "run", "./src/grace.ts", "lint", "--path", root, "--profile", "autonomous", "--fail-on", "warnings"],
+      cwd: repoRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(Buffer.from(result.stdout).toString("utf8")).toContain("Warnings:");
   });
 });

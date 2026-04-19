@@ -3,7 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "bun:test";
 
-import { findModules, loadGraceArtifactIndex, resolveGovernedFile, resolveModule } from "./query/core";
+import { findModules, findVerifications, loadGraceArtifactIndex, resolveGovernedFile, resolveModule, resolveVerification } from "./query/core";
+import { buildModuleHealth } from "./query/health";
 
 function createProject() {
   const root = mkdtempSync(path.join(os.tmpdir(), "grace-query-"));
@@ -173,6 +174,7 @@ export const db = {};
 //   LINKS: M-PROVIDER-PERSIST, M-DB
 // END_CONTRACT: getProviderConfig
 export async function getProviderConfig() {
+  console.info("[ProviderConfigPersistence][getProviderConfig][BLOCK_GET_PROVIDER_CONFIG] read");
   // START_BLOCK_GET_PROVIDER_CONFIG
   return { ok: true };
   // END_BLOCK_GET_PROVIDER_CONFIG
@@ -186,6 +188,31 @@ export async function getProviderConfig() {
 //   LINKS: M-PROVIDER-PERSIST
 // END_CONTRACT: providerConfigRepo
 export const providerConfigRepo = { getProviderConfig };
+`,
+  );
+
+  writeProjectFile(
+    root,
+    "src/provider/config-repo.test.ts",
+    `// START_MODULE_CONTRACT
+//   PURPOSE: Verify provider config repository behavior.
+//   SCOPE: Deterministic repository tests and evidence checks.
+//   DEPENDS: bun:test, M-PROVIDER-PERSIST
+//   LINKS: M-PROVIDER-PERSIST
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   provider config smoke - Confirms provider repository evidence marker.
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.1.0 - Added provider config verification]
+// END_CHANGE_SUMMARY
+import { expect, test } from "bun:test";
+
+test("provider config evidence marker", () => {
+  expect("[ProviderConfigPersistence][getProviderConfig][BLOCK_GET_PROVIDER_CONFIG]").toContain("BLOCK_GET_PROVIDER_CONFIG");
+});
 `,
   );
 }
@@ -206,7 +233,10 @@ describe("grace query core", () => {
     expect(providerModule.plan?.contract.purpose).toBe("Persist provider configuration records.");
     expect(providerModule.graph?.path).toBe("src/provider");
     expect(providerModule.verifications.map((entry) => entry.id)).toEqual(["V-M-PROVIDER-PERSIST"]);
-    expect(providerModule.localFiles.map((file) => file.path)).toEqual(["src/provider/config-repo.ts"]);
+    expect(providerModule.localFiles.map((file) => file.path)).toEqual([
+      "src/provider/config-repo.test.ts",
+      "src/provider/config-repo.ts",
+    ]);
     expect(providerModule.steps.map((step) => step.stepTag)).toEqual(["step-2"]);
   });
 
@@ -247,6 +277,80 @@ describe("grace query core", () => {
     expect(fileRecord.blocks.map((block) => block.name)).toEqual(["GET_PROVIDER_CONFIG"]);
   });
 
+  it("finds verification entries and resolves them by id or module target", () => {
+    const root = createQueryProject();
+    const index = loadGraceArtifactIndex(root);
+
+    const matches = findVerifications(index, { query: "provider config" });
+    expect(matches.map((match) => match.verification.id)).toEqual(["V-M-PROVIDER-PERSIST"]);
+
+    const resolved = resolveVerification(index, "M-PROVIDER-PERSIST");
+    expect(resolved.verification.id).toBe("V-M-PROVIDER-PERSIST");
+    expect(resolved.module?.id).toBe("M-PROVIDER-PERSIST");
+  });
+
+  it("builds module health from shared docs and linked files", () => {
+    const root = createQueryProject();
+    const index = loadGraceArtifactIndex(root);
+
+    const providerModule = resolveModule(index, "M-PROVIDER-PERSIST");
+    const health = buildModuleHealth(index, providerModule);
+    expect(health.state).toBe("ready");
+    expect(health.implementationFiles).toEqual(["src/provider/config-repo.ts"]);
+    expect(health.verificationTestFiles).toEqual(["src/provider/config-repo.test.ts"]);
+
+    const dbHealth = buildModuleHealth(index, resolveModule(index, "M-DB"));
+    expect(dbHealth.state).toBe("blocked");
+    expect(dbHealth.nextAction).toContain("$grace-verification");
+  });
+
+  it("preserves ambiguity errors when resolving verification entries", () => {
+    const root = createQueryProject();
+    writeProjectFile(
+      root,
+      "docs/verification-plan.xml",
+      `<VerificationPlan VERSION="0.1.0">
+  <ModuleVerification>
+    <V-M-PROVIDER-PERSIST MODULE="M-PROVIDER-PERSIST" PRIORITY="high">
+      <test-files>
+        <file>src/provider/config-repo.test.ts</file>
+      </test-files>
+      <module-checks>
+        <check-1>bun test src/provider</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Reads and writes provider config records.</scenario-1>
+      </scenarios>
+      <required-log-markers>
+        <marker-1>[ProviderConfigPersistence][getProviderConfig][BLOCK_GET_PROVIDER_CONFIG]</marker-1>
+      </required-log-markers>
+      <wave-follow-up>Exercise provider configuration through the server shell.</wave-follow-up>
+      <phase-follow-up>Run workspace provider checks.</phase-follow-up>
+    </V-M-PROVIDER-PERSIST>
+    <V-M-PROVIDER-PERSIST-FAILURE MODULE="M-PROVIDER-PERSIST" PRIORITY="medium">
+      <test-files>
+        <file>src/provider/config-repo.test.ts</file>
+      </test-files>
+      <module-checks>
+        <check-1>bun test src/provider</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="failure">Rejects malformed provider config.</scenario-1>
+      </scenarios>
+      <required-trace-assertions>
+        <assertion-1>Malformed config never reaches persistence.</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>Exercise provider configuration through the server shell.</wave-follow-up>
+      <phase-follow-up>Run workspace provider checks.</phase-follow-up>
+    </V-M-PROVIDER-PERSIST-FAILURE>
+  </ModuleVerification>
+</VerificationPlan>`,
+    );
+
+    const index = loadGraceArtifactIndex(root);
+    expect(() => resolveVerification(index, "M-PROVIDER-PERSIST")).toThrow("multiple verification entries");
+  });
+
   it("wires module and file query commands through the CLI", () => {
     const root = createQueryProject();
     const repoRoot = path.resolve(import.meta.dir, "..");
@@ -268,5 +372,23 @@ describe("grace query core", () => {
     });
     expect(fileResult.exitCode).toBe(0);
     expect(Buffer.from(fileResult.stdout).toString("utf8")).toContain("Contract getProviderConfig");
+
+    const verificationResult = Bun.spawnSync({
+      cmd: [process.execPath, "run", "./src/grace.ts", "verification", "show", "V-M-PROVIDER-PERSIST", "--path", root],
+      cwd: repoRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(verificationResult.exitCode).toBe(0);
+    expect(Buffer.from(verificationResult.stdout).toString("utf8")).toContain("GRACE Verification");
+
+    const healthResult = Bun.spawnSync({
+      cmd: [process.execPath, "run", "./src/grace.ts", "module", "health", "M-PROVIDER-PERSIST", "--path", root],
+      cwd: repoRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(healthResult.exitCode).toBe(0);
+    expect(Buffer.from(healthResult.stdout).toString("utf8")).toContain("State: ready");
   });
 });

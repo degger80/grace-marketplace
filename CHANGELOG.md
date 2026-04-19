@@ -6,6 +6,33 @@ The format is inspired by Keep a Changelog, and this project follows Semantic Ve
 
 This changelog currently starts at `1.3.0`. Earlier history is available in the git log.
 
+## [3.10.0] - 2026-04-19
+
+### Added
+
+- Added `grace verification find/show` so verification-plan entries are queryable without manual XML scanning.
+- Added `grace module health` plus optional module health summaries in `grace status --with modules`.
+- Added `grace lint --explain <code>`, remediation-aware text output, and configurable `--fail-on` policies for CI.
+- Added release hygiene assets: `RELEASING.md`, `scripts/release-checklist.ts`, `.github/workflows/validate.yml`, and CLI examples under `examples/cli/`.
+
+### Changed
+
+- Strengthened the autonomy gate with technology-artifact checks, packet checkpoint requirements, module-implementation checks, test-file linkage checks, and marker-to-block validation.
+- Enriched `grace lint` and `grace status` JSON output with schema/version metadata and summary counts for machine-readable automation.
+- Extended marketplace validation to verify `package.json` version sync and require a matching `CHANGELOG.md` entry for the current version.
+
+## [3.8.0] - 2026-04-19
+
+### Added
+
+- Added `grace lint --profile autonomous` as a cheap autonomy-readiness gate before long autonomous runs.
+- Added `grace status` for project health, autonomy blockers, and next-action guidance.
+
+### Changed
+
+- Reframed the marketplace, CLI docs, and GRACE skills around process-first execution, semantic anchoring, approved stacks, checkpoint reports, and operational packets.
+- Updated `grace-init` templates so technology, development-plan, verification-plan, and operational-packets examples explicitly model autonomy policy and checkpoint handoff.
+
 ## [3.7.0] - 2026-04-05
 
 ### Added

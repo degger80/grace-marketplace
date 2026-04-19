@@ -1,4 +1,11 @@
-import type { FileMarkupRecord, ModuleMatch, ModuleRecord, ModuleVerificationRecord } from "./types";
+import type {
+  FileMarkupRecord,
+  ModuleHealthRecord,
+  ModuleMatch,
+  ModuleRecord,
+  ModuleVerificationRecord,
+  VerificationMatch,
+} from "./types";
 import { getModuleDepends, getModuleName, getModulePath, getModuleType, getModuleVerificationIds } from "./core";
 
 function formatList(label: string, items: string[]) {
@@ -49,6 +56,14 @@ function formatVerificationDetails(entry: ModuleVerificationRecord) {
   return lines;
 }
 
+function formatModuleHealthIssues(label: string, issues: ModuleHealthRecord["blockers"]) {
+  if (issues.length === 0) {
+    return [label, "- none"];
+  }
+
+  return [label, ...issues.map((issue) => `- ${issue.code}: ${issue.message} Fix: ${issue.remediation}`)];
+}
+
 function renderTable(rows: string[][], headers: string[]) {
   const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
   const formatRow = (row: string[]) => row.map((cell, index) => cell.padEnd(widths[index])).join("  ");
@@ -73,7 +88,91 @@ export function formatModuleFindTable(matches: ModuleMatch[]) {
   return renderTable(rows, ["ID", "NAME", "TYPE", "PATH", "VERIFICATION"]);
 }
 
-export function formatModuleText(moduleRecord: ModuleRecord, options: { withVerification: boolean }) {
+export function formatVerificationFindTable(matches: VerificationMatch[]) {
+  if (matches.length === 0) {
+    return "No verification entries found.";
+  }
+
+  const rows = matches.map(({ verification, module }) => [
+    verification.id,
+    verification.moduleId ?? "-",
+    module ? getModuleName(module) : "-",
+    verification.priority ?? "-",
+    String(verification.testFiles.length),
+    String(verification.scenarios.length),
+  ]);
+
+  return renderTable(rows, ["ID", "MODULE", "MODULE_NAME", "PRIORITY", "TESTS", "SCENARIOS"]);
+}
+
+export function formatModuleHealthTable(records: ModuleHealthRecord[]) {
+  if (records.length === 0) {
+    return "No module health records available.";
+  }
+
+  const rows = records.map((record) => [
+    record.moduleId,
+    record.state,
+    record.summary.hasImplementationFiles ? String(record.implementationFiles.length) : "0",
+    record.summary.hasVerification ? String(record.verificationIds.length) : "0",
+    record.summary.hasVerificationTests ? String(record.verificationTestFiles.length) : "0",
+    record.summary.autonomyReady ? "yes" : "no",
+  ]);
+
+  return renderTable(rows, ["ID", "STATE", "IMPL", "VERIFY", "TESTS", "AUTO_READY"]);
+}
+
+export function formatVerificationText(match: VerificationMatch) {
+  const lines = [
+    "GRACE Verification",
+    "==================",
+    `ID: ${match.verification.id}`,
+    `Module: ${match.verification.moduleId ?? "unknown"}`,
+    `Module Name: ${match.module ? getModuleName(match.module) : "unknown"}`,
+    `Priority: ${match.verification.priority ?? "n/a"}`,
+  ];
+
+  if (match.module) {
+    lines.push(`Module Path: ${getModulePath(match.module) ?? "n/a"}`);
+  }
+
+  lines.push(...formatVerificationDetails(match.verification));
+  return lines.join("\n");
+}
+
+export function formatModuleHealthText(record: ModuleHealthRecord) {
+  const lines = [
+    "GRACE Module Health",
+    "===================",
+    `ID: ${record.moduleId}`,
+    `Name: ${record.name}`,
+    `Type: ${record.type ?? "unknown"}`,
+    `Path: ${record.path ?? "n/a"}`,
+    `State: ${record.state}`,
+    `Verification IDs: ${record.verificationIds.join(", ") || "none"}`,
+    `Implementation Files: ${record.implementationFiles.join(", ") || "none"}`,
+    `Governed Test Files: ${record.governedTestFiles.join(", ") || "none"}`,
+    `Verification Test Files: ${record.verificationTestFiles.join(", ") || "none"}`,
+    "",
+    "Summary",
+    `- Plan Record: ${record.summary.hasPlan ? "yes" : "no"}`,
+    `- Graph Record: ${record.summary.hasGraph ? "yes" : "no"}`,
+    `- Implementation Files: ${record.summary.hasImplementationFiles ? "yes" : "no"}`,
+    `- Verification Entry: ${record.summary.hasVerification ? "yes" : "no"}`,
+    `- Verification Tests: ${record.summary.hasVerificationTests ? "yes" : "no"}`,
+    `- Pending Steps: ${record.summary.pendingSteps}`,
+    `- Completed Steps: ${record.summary.completedSteps}`,
+    `- Autonomy Ready: ${record.summary.autonomyReady ? "yes" : "no"}`,
+    "",
+  ];
+
+  lines.push(...formatModuleHealthIssues("Blockers", record.blockers));
+  lines.push("", ...formatModuleHealthIssues("Warnings", record.warnings), "", "Suggested Next Action", `- ${record.nextAction}`);
+
+  return lines.join("\n");
+}
+
+export function formatModuleText(moduleRecord: ModuleRecord, options: { withVerification: boolean; health?: ModuleHealthRecord | null }) {
   const lines = [
     "GRACE Module",
     "============",
@@ -136,6 +235,22 @@ export function formatModuleText(moduleRecord: ModuleRecord, options: { withVeri
         lines.pop();
       }
     }
+  }
+
+  if (options.health) {
+    lines.push("", "Health");
+    lines.push(`- State: ${options.health.state}`);
+    lines.push(`- Implementation Files: ${options.health.implementationFiles.join(", ") || "none"}`);
+    lines.push(`- Verification Test Files: ${options.health.verificationTestFiles.join(", ") || "none"}`);
+    lines.push(`- Blockers: ${options.health.blockers.length}`);
+    lines.push(`- Warnings: ${options.health.warnings.length}`);
+    if (options.health.blockers.length > 0) {
+      lines.push(...options.health.blockers.map((issue) => `- Blocker ${issue.code}: ${issue.message}`));
+    }
+    if (options.health.warnings.length > 0) {
+      lines.push(...options.health.warnings.map((issue) => `- Warning ${issue.code}: ${issue.message}`));
+    }
+    lines.push(`- Next Action: ${options.health.nextAction}`);
   }
 
   return lines.join("\n");

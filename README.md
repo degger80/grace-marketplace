@@ -4,7 +4,7 @@
 
 This repository ships the GRACE skills plus the optional `grace` CLI. It is a packaging and distribution repository, not an end-user application.
 
-Current packaged version: `3.8.0`
+Current packaged version: `3.10.0`
 
 ## What This Repository Ships
 
@@ -271,9 +271,14 @@ $grace-fix
 | `src/grace.ts` | CLI entrypoint |
 | `src/grace-lint.ts` | `grace lint` command |
 | `src/grace-module.ts` | `grace module find/show` commands |
+| `src/grace-verification.ts` | `grace verification find/show` commands |
 | `src/grace-file.ts` | `grace file show` command |
 | `src/query/*` | Artifact loader, index, and render layer for CLI queries |
 | `scripts/validate-marketplace.ts` | Packaging and release validation |
+| `scripts/release-checklist.ts` | Release hygiene checklist for the current version and workflow coverage |
+| `.github/workflows/validate.yml` | CI workflow for tests, CLI validation, and marketplace checks |
+| `examples/cli/*` | Sample CLI flows and packet examples |
+| `RELEASING.md` | Manual release checklist and validation commands |
 
 ## For Maintainers
 
@@ -281,7 +286,7 @@ $grace-fix
 - Keep `plugins/grace/skills/grace/*` synchronized with the canonical skill files.
 - Keep versions synchronized across `README.md`, `package.json`, `openpackage.yml`, `.claude-plugin/marketplace.json`, and `plugins/grace/.claude-plugin/plugin.json`.
 - Validate packaging changes with `bun run ./scripts/validate-marketplace.ts`.
-- Validate CLI changes with `bun run ./src/grace.ts lint --path . --allow-missing-docs` and `bun test`.
+- Validate CLI changes with `bun run validate:ci`.
 - Do not assume every directory under `skills/grace/` is published; the actual shipped set is declared in `.claude-plugin/marketplace.json`.
 
 ## Development and Validation
@@ -301,13 +306,20 @@ bun test
 Run the CLI against the repository itself:
 
 ```bash
-bun run ./src/grace.ts lint --path . --allow-missing-docs
+bun run validate:cli
 ```
 
 Run marketplace and packaging validation:
 
 ```bash
-bun run ./scripts/validate-marketplace.ts
+bun run validate:marketplace
+```
+
+Run the full CI-compatible validation stack:
+
+```bash
+bun run validate:ci
+bun run release:checklist
 ```
 
 Smoke test the query layer against a real GRACE project:

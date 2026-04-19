@@ -7,6 +7,10 @@ import { defineCommand, type CommandDef, runMain } from "citty";
 import { loadGraceLintConfig } from "./lint/config";
 import { lintGraceProject } from "./lint/core";
 import type { LintIssue } from "./lint/types";
+import { loadGraceArtifactIndex } from "./query/core";
+import { collectModuleHealth } from "./query/health";
+import { formatModuleHealthTable } from "./query/render";
+import type { ModuleHealthRecord } from "./query/types";
 import {
   collectCodeFiles,
   findSection,
@@ -58,7 +62,21 @@ type HealthSnapshot = {
 };
 
 export type StatusResult = {
+  schemaVersion: string;
+  tool: "grace-status";
+  generatedAt: string;
   root: string;
+  summary: {
+    moduleSummaryLoaded: boolean;
+    moduleCount: number;
+    readyModules: number;
+    attentionModules: number;
+    blockedModules: number;
+    integrityErrors: number;
+    integrityWarnings: number;
+    autonomyBlockers: number;
+    autonomyWarnings: number;
+  };
   artifacts: ArtifactStatus[];
   metrics: CodebaseMetrics;
   health: HealthSnapshot;
@@ -74,6 +92,8 @@ export type StatusResult = {
   };
   recentChanges: RecentChange[];
   nextAction: string;
+  modules?: ModuleHealthRecord[];
+  moduleHealthLoadError?: string;
 };
 
 type ScannedFile = {
@@ -274,7 +294,7 @@ function suggestNextAction(input: {
   return "Project is healthy.";
 }
 
-export function collectProjectStatus(projectRoot: string): StatusResult {
+export function collectProjectStatus(projectRoot: string, options: { includeModules?: boolean } = {}): StatusResult {
   const root = path.resolve(projectRoot);
   const docs = {
     agents: readTextIfExists(path.join(root, "AGENTS.md")),
@@ -288,6 +308,15 @@ export function collectProjectStatus(projectRoot: string): StatusResult {
 
   const scannedFiles = scanCodebase(root);
   const autonomousLint = lintGraceProject(root, { allowMissingDocs: false, profile: "autonomous" });
+  let modules: ModuleHealthRecord[] | undefined;
+  let moduleHealthLoadError: string | undefined;
+  if (options.includeModules && docs.graph && docs.plan && docs.verification) {
+    try {
+      modules = collectModuleHealth(loadGraceArtifactIndex(root));
+    } catch (error) {
+      moduleHealthLoadError = error instanceof Error ? error.message : String(error);
+    }
+  }
 
   const graphModuleIds = new Set(Array.from((docs.graph ?? "").matchAll(/<(M-[A-Za-z0-9-]+)(?=[\s>])/g), (match) => match[1]));
   const planModuleIds = new Set(Array.from((docs.plan ?? "").matchAll(/<(M-[A-Za-z0-9-]+)(?=[\s>])/g), (match) => match[1]));
@@ -321,8 +350,8 @@ export function collectProjectStatus(projectRoot: string): StatusResult {
     testFilesWithModuleContract: scannedFiles.filter((file) => file.isTest && file.hasModuleContract).length,
     governedFiles: scannedFiles.filter((file) => file.hasGraceMarkers).length,
     semanticBlocks: scannedFiles.reduce((sum, file) => sum + file.blockCount, 0),
-    unpairedBlockIssues: autonomousLint.issues.filter(
-      (issue) => issue.code.includes("block") && issue.code !== "markup.duplicate-block-name",
+    unpairedBlockIssues: autonomousLint.issues.filter((issue) =>
+      ["markup.unmatched-block-end", "markup.mismatched-block-end", "markup.missing-block-end"].includes(issue.code)
     ).length,
     filesWithStableLogMarkers: scannedFiles.filter((file) => file.hasStableLogMarkers).length,
     testFilesWithEvidenceAssertions: scannedFiles.filter((file) => file.isTest && file.hasEvidenceAssertions).length,
@@ -358,13 +387,34 @@ export function collectProjectStatus(projectRoot: string): StatusResult {
   const integrityWarnings = autonomousLint.issues.filter(
     (issue) => issue.severity === "warning" && !issue.code.startsWith("autonomy."),
   );
-  const autonomyBlockers = autonomousLint.issues.filter((issue) => issue.severity === "error");
+  const autonomyBlockers = autonomousLint.issues.filter(
+    (issue) => issue.severity === "error" && issue.code.startsWith("autonomy."),
+  );
   const autonomyWarnings = autonomousLint.issues.filter(
     (issue) => issue.severity === "warning" && issue.code.startsWith("autonomy."),
   );
+  const moduleCount = modules?.length ?? sharedModuleIds.size;
+  const readyModules = modules?.filter((module) => module.state === "ready").length ?? 0;
+  const attentionModules = modules?.filter((module) => module.state === "attention").length ?? 0;
+  const blockedModules = modules?.filter((module) => module.state === "blocked").length ?? 0;
+  const moduleSummaryLoaded = Boolean(modules);
 
   return {
+    schemaVersion: "1.0.0",
+    tool: "grace-status",
+    generatedAt: new Date().toISOString(),
     root,
+    summary: {
+      moduleSummaryLoaded,
+      moduleCount,
+      readyModules,
+      attentionModules,
+      blockedModules,
+      integrityErrors: integrityErrors.length,
+      integrityWarnings: integrityWarnings.length,
+      autonomyBlockers: autonomyBlockers.length,
+      autonomyWarnings: autonomyWarnings.length,
+    },
     artifacts,
     metrics,
     health,
@@ -391,6 +441,8 @@ export function collectProjectStatus(projectRoot: string): StatusResult {
       pendingSteps: health.pendingSteps,
       sharedModulesWithoutGovernedFiles: health.sharedModulesWithoutGovernedFiles.length,
     }),
+    modules,
+    moduleHealthLoadError,
   };
 }
 
@@ -415,6 +467,13 @@ export function formatStatusText(result: StatusResult) {
   }
 
   lines.push(
+    "",
+    "Summary",
+    result.summary.moduleSummaryLoaded
+      ? `- Modules: ${result.summary.moduleCount} total, ${result.summary.readyModules} ready, ${result.summary.attentionModules} attention, ${result.summary.blockedModules} blocked`
+      : `- Modules: ${result.summary.moduleCount} shared modules discovered (use --with modules for health states)`,
+    `- Integrity: ${result.summary.integrityErrors} errors, ${result.summary.integrityWarnings} warnings`,
+    `- Autonomy: ${result.summary.autonomyBlockers} blockers, ${result.summary.autonomyWarnings} warnings`,
     "",
     "Codebase Metrics",
     `- Source files: ${result.metrics.sourceFiles}`,
@@ -458,6 +517,12 @@ export function formatStatusText(result: StatusResult) {
     lines.push(...result.autonomy.warnings.map((issue) => `- Autonomy warning: ${issue}`));
   }
 
+  if (result.modules && result.modules.length > 0) {
+    lines.push("", "Module Health", formatModuleHealthTable(result.modules));
+  } else if (result.moduleHealthLoadError) {
+    lines.push("", "Module Health", `- unavailable: ${result.moduleHealthLoadError}`);
+  }
+
   lines.push("", "Recent Changes");
   if (result.recentChanges.length === 0) {
     lines.push("- none");
@@ -479,6 +544,40 @@ function resolveFormat(format: unknown, json: unknown) {
   }
 
   return resolved;
+}
+
+function resolveWithList(value: unknown) {
+  return String(value ?? "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function resolveFailOn(value: unknown) {
+  const failOn = String(value ?? "never");
+  if (failOn !== "never" && failOn !== "errors" && failOn !== "warnings") {
+    throw new Error(`Unsupported fail-on policy \`${failOn}\`. Use \`never\`, \`errors\`, or \`warnings\`.`);
+  }
+
+  return failOn;
+}
+
+function shouldFail(result: StatusResult, failOn: string) {
+  const errorCount = result.summary.integrityErrors
+    + result.summary.autonomyBlockers
+    + (result.summary.moduleSummaryLoaded ? result.summary.blockedModules : 0);
+  const warningCount = result.summary.integrityWarnings
+    + result.summary.autonomyWarnings
+    + (result.summary.moduleSummaryLoaded ? result.summary.attentionModules : 0);
+  if (failOn === "never") {
+    return false;
+  }
+
+  if (failOn === "warnings") {
+    return errorCount + warningCount > 0;
+  }
+
+  return errorCount > 0;
 }
 
 export const statusCommand = defineCommand({
@@ -504,17 +603,32 @@ export const statusCommand = defineCommand({
       description: "Shortcut for --format json",
       default: false,
     },
+    with: {
+      type: "string",
+      description: "Optional extras, currently supports: modules",
+      default: "",
+    },
+    failOn: {
+      type: "string",
+      description: "Exit policy: never, errors, or warnings",
+      default: "never",
+    },
   },
   async run(context) {
     const format = resolveFormat(context.args.format, context.args.json);
-    const result = collectProjectStatus(String(context.args.path ?? "."));
+    const withValues = resolveWithList(context.args.with);
+    const failOn = resolveFailOn(context.args.failOn);
+    const result = collectProjectStatus(String(context.args.path ?? "."), {
+      includeModules: withValues.includes("modules"),
+    });
 
     if (format === "json") {
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-      return;
+    } else {
+      process.stdout.write(`${formatStatusText(result)}\n`);
     }
 
-    process.stdout.write(`${formatStatusText(result)}\n`);
+    process.exitCode = shouldFail(result, failOn) ? 1 : 0;
   },
 });
 
