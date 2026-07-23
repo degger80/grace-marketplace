@@ -361,6 +361,56 @@ export function run() {
     expect(result.issues).toHaveLength(0);
   });
 
+  it("accepts KEYWORDS as a canonical contract field", () => {
+    const root = createProject();
+    writeCurrentDocs(root);
+
+    writeProjectFile(
+      root,
+      "src/keywords.ts",
+      `// START_MODULE_CONTRACT
+//   PURPOSE: Save configuration payloads to disk for later runs.
+//   SCOPE: Single writer helper, no read path.
+//   DEPENDS: none
+//   LINKS: M-EXAMPLE
+//   KEYWORDS: [Saver, FileWrite]
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   saveConfig - Persists a configuration object.
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.1.0 - Added configuration writer]
+// END_CHANGE_SUMMARY
+
+// START_CONTRACT: saveConfig
+//   PURPOSE: Persist a configuration object so the next run can restore it.
+//   INPUTS: { config: Record<string, unknown> - values to persist }
+//   OUTPUTS: { boolean - true when the write succeeded }
+//   SIDE_EFFECTS: Writes to the filesystem.
+//   KEYWORDS: [Saver, FileWrite]
+//   LINKS: M-EXAMPLE
+// END_CONTRACT: saveConfig
+export function saveConfig(config: Record<string, unknown>): boolean {
+  // START_BLOCK_WRITE_CONFIG
+  return Object.keys(config).length > 0;
+  // END_BLOCK_WRITE_CONFIG
+}
+`,
+    );
+
+    const result = lintGraceProject(root);
+    const keywordIssues = result.issues.filter(
+      (issue) =>
+        (issue.code === "markup.unknown-module-contract-field" ||
+          issue.code === "markup.unknown-function-contract-field") &&
+        issue.message.includes("KEYWORDS"),
+    );
+
+    expect(keywordIssues).toHaveLength(0);
+  });
+
   it("treats test files as local-symbol maps instead of export surfaces", () => {
     const root = createProject();
     writeCurrentDocs(root);

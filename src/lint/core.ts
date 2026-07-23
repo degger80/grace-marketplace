@@ -35,8 +35,8 @@ const LINT_CONFIG_FILE = ".grace-lint.json";
 const MODULE_ID_REGEX = /^M-[A-Z0-9]+(?:-[A-Z0-9]+)*$/;
 const VERIFICATION_ID_REGEX = /^V-M-[A-Z0-9]+(?:-[A-Z0-9]+)*$/;
 const BLOCK_NAME_REGEX = /^[A-Z0-9]+(?:_[A-Z0-9]+)*$/;
-const MODULE_CONTRACT_FIELDS = new Set(["PURPOSE", "SCOPE", "DEPENDS", "LINKS", "ROLE", "MAP_MODE"]);
-const FUNCTION_CONTRACT_FIELDS = new Set(["PURPOSE", "INPUTS", "OUTPUTS", "SIDE_EFFECTS", "LINKS"]);
+const MODULE_CONTRACT_FIELDS = new Set(["PURPOSE", "SCOPE", "DEPENDS", "LINKS", "ROLE", "MAP_MODE", "KEYWORDS"]);
+const FUNCTION_CONTRACT_FIELDS = new Set(["PURPOSE", "INPUTS", "OUTPUTS", "SIDE_EFFECTS", "LINKS", "KEYWORDS"]);
 const ANNOTATION_TAG_PREFIXES = ["fn-", "type-", "class-", "export-", "const-"];
 
 const UNIQUE_TAG_ANTI_PATTERNS = [
