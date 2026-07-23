@@ -18,6 +18,38 @@ function writeProjectFile(root: string, relativePath: string, contents: string) 
   writeFileSync(filePath, contents);
 }
 
+function keywordsFixture(tags: string) {
+  return `// START_MODULE_CONTRACT
+//   PURPOSE: Save configuration payloads to disk for later runs.
+//   SCOPE: Single writer helper, no read path.
+//   DEPENDS: none
+//   LINKS: M-EXAMPLE
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   saveConfig - Persists a configuration object.
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.1.0 - Added configuration writer]
+// END_CHANGE_SUMMARY
+
+// START_CONTRACT: saveConfig
+//   PURPOSE: Persist a configuration object so the next run can restore it.
+//   INPUTS: { config: Record<string, unknown> - values to persist }
+//   OUTPUTS: { boolean - true when the write succeeded }
+//   SIDE_EFFECTS: Writes to the filesystem.
+//   KEYWORDS: ${tags}
+//   LINKS: M-EXAMPLE
+// END_CONTRACT: saveConfig
+export function saveConfig(config: Record<string, unknown>): boolean {
+  // START_BLOCK_WRITE_CONFIG
+  return Object.keys(config).length > 0;
+  // END_BLOCK_WRITE_CONFIG
+}
+`;
+}
+
 function writeBaseDocsWithoutVerification(root: string) {
   writeProjectFile(
     root,
@@ -359,6 +391,63 @@ export function run() {
 
     const result = lintGraceProject(root, { allowMissingDocs: true });
     expect(result.issues).toHaveLength(0);
+  });
+
+  it("flags KEYWORDS tags that are missing from the registry", () => {
+    const root = createProject();
+    writeCurrentDocs(root);
+    writeProjectFile(
+      root,
+      "docs/keywords-registry.md",
+      `# Keywords Registry
+
+| Tag | Definition |
+|---|---|
+| \`Sanitizer\` | Normalizes an input into a safe form. |
+| \`FenceStrip\` | Removes a markdown fence from an LLM reply. |
+
+| Pair | Shared set |
+|---|---|
+| \`save_config\` / \`load_config\` | not a tag row |
+`,
+    );
+    writeProjectFile(root, "src/tagged.ts", keywordsFixture("[Sanitizer, StripFence]"));
+
+    const result = lintGraceProject(root);
+    const issues = result.issues.filter((issue) => issue.code === "keywords.unknown-tag");
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0].message).toContain("`StripFence`");
+    expect(issues[0].message).toContain("Did you mean `FenceStrip`?");
+  });
+
+  it("accepts KEYWORDS tags that are declared in the registry", () => {
+    const root = createProject();
+    writeCurrentDocs(root);
+    writeProjectFile(
+      root,
+      "docs/keywords-registry.md",
+      `# Keywords Registry
+
+| Tag | Definition |
+|---|---|
+| \`Sanitizer\` | Normalizes an input into a safe form. |
+| \`FenceStrip\` | Removes a markdown fence from an LLM reply. |
+`,
+    );
+    writeProjectFile(root, "src/tagged.ts", keywordsFixture("[Sanitizer, FenceStrip]"));
+
+    const result = lintGraceProject(root);
+    expect(result.issues.filter((issue) => issue.code === "keywords.unknown-tag")).toHaveLength(0);
+  });
+
+  it("skips the KEYWORDS vocabulary check when the project declares no registry", () => {
+    const root = createProject();
+    writeCurrentDocs(root);
+    writeProjectFile(root, "src/tagged.ts", keywordsFixture("[Sanitizer, StripFence]"));
+
+    const result = lintGraceProject(root);
+    expect(result.issues.filter((issue) => issue.code === "keywords.unknown-tag")).toHaveLength(0);
   });
 
   it("accepts KEYWORDS as a canonical contract field", () => {

@@ -276,6 +276,128 @@ function parseModuleContract(section: MarkupSection) {
   } satisfies ModuleContractInfo;
 }
 
+const KEYWORDS_REGISTRY_FILE = "docs/keywords-registry.md";
+const KEYWORDS_TAG_REGEX = /^[A-Z][A-Za-z0-9]*$/;
+const keywordsRegistryCache = new Map<string, Set<string> | null>();
+
+// Returns the project's declared KEYWORDS vocabulary, or null when the project ships
+// no registry — in that case the vocabulary check stays off instead of guessing.
+function loadKeywordsRegistry(root: string): Set<string> | null {
+  const cached = keywordsRegistryCache.get(root);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  // Tags are declared as the first cell of a markdown table row, wrapped in inline
+  // code: `| \`Sanitizer\` | definition | carrier |`. Rows whose first cell is not a
+  // single CamelCase token are prose (collision tables list two function names), so
+  // they are skipped rather than guessed at.
+  const text = readTextIfExists(path.join(root, KEYWORDS_REGISTRY_FILE));
+  if (text === null) {
+    keywordsRegistryCache.set(root, null);
+    return null;
+  }
+
+  const tags = new Set<string>();
+  for (const line of text.split("\n")) {
+    const match = line.match(/^\s*\|\s*`([^`]+)`\s*\|/);
+    if (match && KEYWORDS_TAG_REGEX.test(match[1])) {
+      tags.add(match[1]);
+    }
+  }
+
+  const registry = tags.size > 0 ? tags : null;
+  keywordsRegistryCache.set(root, registry);
+  return registry;
+}
+
+// Suggests the closest declared tag so a typo or synonym gets corrected rather than added.
+function nearestKnownTag(tag: string, registry: Set<string>): string | null {
+  const lower = tag.toLowerCase();
+  let best: string | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const candidate of registry) {
+    const candidateLower = candidate.toLowerCase();
+
+    // Word-order synonyms (StripFence vs FenceStrip) share their letters but sit far
+    // apart by edit distance, so they are matched on sorted characters instead.
+    if ([...candidateLower].sort().join("") === [...lower].sort().join("")) {
+      return candidate;
+    }
+
+    const distance = editDistance(lower, candidateLower);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = candidate;
+    }
+  }
+
+  const threshold = Math.max(2, Math.floor(tag.length / 3));
+  return bestDistance <= threshold ? best : null;
+}
+
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      const substitution = previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1);
+      current[j] = Math.min(current[j - 1] + 1, previous[j] + 1, substitution);
+    }
+    previous = current;
+  }
+
+  return previous[b.length];
+}
+
+// Keeps every KEYWORDS tag inside the declared vocabulary: one capability must map to
+// exactly one tag, or grep returns half the call sites and the tag stops distinguishing.
+function lintKeywordsTags(
+  result: LintResult,
+  relativePath: string,
+  section: MarkupSection,
+  registry: Set<string>,
+  label: string,
+) {
+  const lines = section.content.split("\n");
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const cleaned = stripCommentPrefix(lines[index]).trim();
+    const match = cleaned.match(/^KEYWORDS:\s*(.*)$/);
+    if (!match) {
+      continue;
+    }
+
+    const tags = match[1]
+      .replace(/^\[/, "")
+      .replace(/\]$/, "")
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
+
+    for (const tag of tags) {
+      if (registry.has(tag)) {
+        continue;
+      }
+
+      const suggestion = nearestKnownTag(tag, registry);
+      const hint = suggestion
+        ? ` Did you mean \`${suggestion}\`?`
+        : "";
+
+      addIssue(result, {
+        severity: "error",
+        code: "keywords.unknown-tag",
+        file: relativePath,
+        line: section.startLine + index,
+        message: `${label} uses tag \`${tag}\` which is not declared in ${KEYWORDS_REGISTRY_FILE}.${hint} Add the tag to the registry when it is genuinely new.`,
+      });
+    }
+  }
+}
+
 function lintContractFieldLabels(
   result: LintResult,
   relativePath: string,
@@ -1030,6 +1152,8 @@ function lintGovernedFile(result: LintResult, root: string, filePath: string, te
   const role = inferRole(contract, analysis);
   const mapMode = inferMapMode(contract, role, mapItems, analysis);
 
+  const keywordsRegistry = loadKeywordsRegistry(root);
+
   if (moduleContractSection && contract) {
     lintContractFieldLabels(
       result,
@@ -1039,6 +1163,10 @@ function lintGovernedFile(result: LintResult, root: string, filePath: string, te
       "markup.unknown-module-contract-field",
       "MODULE_CONTRACT",
     );
+
+    if (keywordsRegistry) {
+      lintKeywordsTags(result, relativePath, moduleContractSection, keywordsRegistry, "MODULE_CONTRACT");
+    }
 
     const missingContractFields = ["PURPOSE", "SCOPE", "DEPENDS", "LINKS"].filter((field) => !contract.fields[field]);
     if (missingContractFields.length > 0) {
@@ -1060,6 +1188,10 @@ function lintGovernedFile(result: LintResult, root: string, filePath: string, te
       "markup.unknown-function-contract-field",
       "START_CONTRACT section",
     );
+
+    if (keywordsRegistry) {
+      lintKeywordsTags(result, relativePath, contractSection, keywordsRegistry, "START_CONTRACT section");
+    }
   }
 
   if (moduleContractSection && contract?.fields.ROLE && !contract.role) {

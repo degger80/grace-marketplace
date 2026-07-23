@@ -118,6 +118,15 @@ const EXACT_GUIDES: Record<string, Omit<LintIssueGuide, "code">> = {
     explanation: "The autonomy profile could not build a coherent GRACE artifact index from the project.",
     remediation: ["Fix malformed or missing GRACE artifacts first.", "Run grace lint without the autonomous profile to resolve structural issues before retrying."],
   },
+  "keywords.unknown-tag": {
+    title: "KEYWORDS Tag Outside The Declared Vocabulary",
+    explanation:
+      "A KEYWORDS tag is not declared in docs/keywords-registry.md. KEYWORDS only work while one capability maps to exactly one tag: a synonym (StripFence beside FenceStrip) breaks grep, because a search for one spelling silently returns half the call sites, and it weakens attention, because one strong signal becomes two weak ones. The check is skipped entirely when the project declares no registry.",
+    remediation: [
+      "Reuse the declared tag the suggestion points at.",
+      "Add the tag to docs/keywords-registry.md when the capability is genuinely new — a registry edit is visible in review, an ad-hoc synonym is not.",
+    ],
+  },
 };
 
 const PREFIX_GUIDES: Array<{ prefix: string; title: string; explanation: string; remediation: string[] }> = [
