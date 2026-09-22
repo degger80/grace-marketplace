@@ -51,7 +51,10 @@ export type RunMeta = RunVcsIdentity & {
 /** Current meta.json schema; bumped when RunMeta gains fields or statuses. */
 export const RUN_META_SCHEMA_VERSION = "1.1.0" as const;
 
-/** How many run directories per project survive pruning after each run. */
+/**
+ * How many *prunable* run directories per project survive pruning after each run.
+ * The newest passing run of every change is protected and never counted here.
+ */
 export const RUN_RETENTION = 10;
 
 /** Upper bound on each git probe so a wedged git never stalls a gate run. */
@@ -181,10 +184,16 @@ export function reconcileRunMeta(runDir: string): RunMeta | null {
 }
 
 /**
- * Keeps the newest `keep` run directories (lexical sort of the timestamped names,
- * which is chronological for the format above) and removes the rest. Missing or
- * empty parents are a no-op; individual removal failures never throw. Surviving
- * directories are reconciled first, so runs the OS killed stop reading as in flight.
+ * Removes stale run directories, protecting the evidence an archive can cite: the newest
+ * run with `status: "passed"` of every change survives indefinitely. Everything else is
+ * prunable — failed, timed out, interrupted and killed runs, a run still recorded as
+ * `running` whose writer is gone, passing runs superseded by a newer pass of the same
+ * change, passing runs with no `changeId` (unbound lint runs nothing cites), and runs
+ * whose meta.json is missing or unparseable (a run killed before it wrote one) — and only
+ * the newest `keep` of those survive. Surviving directories are reconciled first, so runs
+ * the OS killed stop reading as in flight. Directory names sort lexically, which is
+ * chronological for the timestamp format above. Missing or empty parents are a no-op;
+ * individual removal failures never throw.
  */
 export function pruneRuns(projectRunsParent: string, keep: number = RUN_RETENTION): void {
   let entries: string[];
@@ -197,10 +206,22 @@ export function pruneRuns(projectRunsParent: string, keep: number = RUN_RETENTIO
     .filter((name) => statSafe(path.join(projectRunsParent, name))?.isDirectory() ?? false)
     .sort()
     .reverse();
-  for (const kept of dirs.slice(0, keep)) {
-    reconcileRunMeta(path.join(projectRunsParent, kept));
+
+  const protectedChanges = new Set<string>();
+  const prunable: string[] = [];
+  for (const name of dirs) {
+    const dir = path.join(projectRunsParent, name);
+    reconcileRunMeta(dir);
+    const meta = readRunMeta(dir);
+    const changeId = typeof meta?.changeId === "string" && meta.changeId ? meta.changeId : null;
+    if (meta?.status === "passed" && changeId && !protectedChanges.has(changeId)) {
+      protectedChanges.add(changeId);
+      continue;
+    }
+    prunable.push(name);
   }
-  for (const stale of dirs.slice(keep)) {
+
+  for (const stale of prunable.slice(Math.max(0, keep))) {
     try {
       rmSync(path.join(projectRunsParent, stale), { recursive: true, force: true });
     } catch {

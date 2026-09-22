@@ -41,6 +41,8 @@ export type CommandRunnerOptions = {
   progress?: (line: string) => void;
   /** Overrides resolveLogRoot() for tests. */
   logRoot?: string;
+  /** How many non-passing run directories survive pruning; default RUN_RETENTION. */
+  runLogRetention?: number;
   /** Injectable clock for deterministic run directory names. */
   now?: () => Date;
 };
@@ -186,7 +188,7 @@ export async function runDeclaredCommands(
       status,
       commands: results.map(toMetaCommand),
     });
-    pruneRuns(path.dirname(runDir));
+    pruneRuns(path.dirname(runDir), options.runLogRetention);
     emit(`logs: ${runDir}`);
   }
 
